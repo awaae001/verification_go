@@ -112,7 +112,7 @@ async function visualFingerprint() {
   try {
     return await webGPUFingerprint();
   } catch (error) {
-    console.debug("[page][fingerprint] WebGPU unavailable; using Canvas 2D", error);
+    console.debug("[page][device] WebGPU unavailable; using Canvas 2D", error);
     return canvasFingerprint();
   }
 }

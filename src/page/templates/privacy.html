@@ -32,7 +32,7 @@
         <ul>
             <li>验证状态及当前验证阶段；</li>
             <li>Cloudflare Turnstile 返回的验证结果及与本次验证相关的临时标识；</li>
-            <li>Telegram 登录过程中用于身份确认的临时信息及用户标识；</li>
+            <li>Telegram 授权过程中用于身份确认的临时信息及用户标识；</li>
             <li>一次性随机值、一次性验证凭证及其他用于防止重放的临时数据；</li>
             <li>Proof of Work 所需的一次性 challenge、solution 及验证结果；</li>
             <li>为保障本服务正常运行、安全检查及故障排查所必需的基础请求信息。</li>
@@ -54,11 +54,11 @@
 
         <p>本服务不会使用这些设备特征建立长期设备档案，也不会使用它们进行广告追踪、跨站识别或与当前验证无关的行为分析。</p>
 
-        <h2>Telegram 登录</h2>
+        <h2>Telegram 授权</h2>
 
         <p>验证流程会通过 Telegram OpenID Connect 确认当前用户对应的 Telegram 身份。</p>
 
-        <p>在验证期间，本服务会临时处理完成身份确认所必需的 Telegram 登录信息和用户标识。Telegram 登录属于固定验证流程的一部分，无论调用本服务的网站最终是否需要获知你的 Telegram 身份，该步骤都会执行。
+        <p>在验证期间，本服务会临时处理完成身份确认所必需的 Telegram 授权信息和用户标识。Telegram 授权属于固定验证流程的一部分，无论调用本服务的网站最终是否需要获知你的 Telegram 身份，该步骤都会执行。
         </p>
 
         <p>验证完成后，是否向调用网站提供 Telegram 用户标识取决于该网站是否获得相应权限。</p>
@@ -70,7 +70,7 @@
 
         <p>调用网站是否拥有该权限由服务端预先配置和授权，不能由验证页面、浏览器参数或用户自行修改。</p>
 
-        <p>本验证服务不会仅因为你完成了一次 Telegram 登录而为你建立长期用户账户，也不会将 Telegram 用户标识用于与当前验证无关的长期用户画像。</p>
+        <p>本验证服务不会仅因为你完成了一次 Telegram 授权而为你建立长期用户账户，也不会将 Telegram 用户标识用于与当前验证无关的长期用户画像。</p>
 
         <p>你可以通过 Telegram 提供的账户或授权管理功能撤销相关授权。有关 Telegram 如何处理你的数据，请参阅 <a href="https://telegram.org/privacy"
                 target="_blank" rel="noopener noreferrer">Telegram Privacy Policy</a>。</p>
@@ -109,7 +109,7 @@
 
         <h2>持久化保存</h2>
 
-        <p><strong>本服务不会以建立长期用户档案为目的持久化保存验证过程中获得的设备指纹、Telegram 登录状态或临时验证凭证。</strong></p>
+        <p><strong>本服务不会以建立长期用户档案为目的持久化保存验证过程中获得的设备指纹、Telegram 授权状态或临时验证凭证。</strong></p>
 
         <p>设备指纹本身不会上传服务器。</p>
 
@@ -144,7 +144,7 @@
 
         <ul>
             <li>完成安全验证；</li>
-            <li>确认 Telegram 登录结果；</li>
+            <li>确认 Telegram 授权结果；</li>
             <li>验证 Proof of Work；</li>
             <li>维持验证流程完整性；</li>
             <li>防止自动化滥用；</li>

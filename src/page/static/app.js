@@ -1,5 +1,5 @@
 import { prepareTelegramLogin, TelegramLoginError } from "./telegram.js";
-import { computeStartOffset, UnsupportedBrowserError } from "./fingerprint.js";
+import { computeStartOffset, UnsupportedBrowserError } from "./device.js";
 
 const config = JSON.parse(document.getElementById("page-config").textContent);
 
@@ -286,7 +286,7 @@ async function startConfirmation() {
   try {
     session.startOffset = await computeStartOffset(challenge.maximum_work);
   } catch (error) {
-    console.debug("[page][fingerprint] failed", error);
+    console.debug("[page][device] failed", error);
     setStatus(msg("status.stopped"));
     const message = error instanceof UnsupportedBrowserError
       ? msg("error.unsupported_browser")
