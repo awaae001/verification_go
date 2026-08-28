@@ -250,7 +250,7 @@ Claims、签名、issuer、audience 和时间全部通过后，才消费 `payloa
 
 ## 本地浏览器特征
 
-Telegram 验证成功后，浏览器计算音频与 WebGPU 特征。它们只决定 PoW 搜索起点，不上传服务端，也不是密码学意义上的可信设备证明。
+Telegram 验证成功后，浏览器计算音频与视觉渲染特征。视觉特征优先使用 WebGPU，WebGPU 不可用时降级到 Canvas 2D。它们只决定 PoW 搜索起点，不上传服务端，也不是密码学意义上的可信设备证明。
 
 ### 音频特征
 
@@ -299,7 +299,7 @@ features
 
 `features` 转为字符串数组并排序。把整个对象编码为 JSON，对 UTF-8 字节计算 SHA-256，编码为小写十六进制字符串。
 
-无法取得 WebGPU Adapter 时，已有流程不会进入 PoW。
+无法取得 WebGPU Adapter 时，使用 Canvas 2D 固定绘制结果的像素数据作为降级特征；仅当 WebGPU 和 Canvas 2D 都不可用时才停止流程。
 
 ### 搜索起点
 

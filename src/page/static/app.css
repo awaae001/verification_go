@@ -1,0 +1,307 @@
+:root {
+  color-scheme: light dark;
+  --background: #f4f5f7;
+  --surface: #ffffff;
+  --border: #d8dbe0;
+  --text: #14161a;
+  --muted: #5c626d;
+  --accent: #2563eb;
+  --success: #15803d;
+  --error: #b91c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #101216;
+    --surface: #191c22;
+    --border: #2c313a;
+    --text: #eceef2;
+    --muted: #9aa1ad;
+    --accent: #60a5fa;
+    --success: #4ade80;
+    --error: #f87171;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1rem;
+  display: flex;
+  justify-content: center;
+  background: var(--background);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.card {
+  width: 100%;
+  max-width: 34rem;
+  padding: 1.75rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.card-header h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+.steps {
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.step {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.step[data-status="active"] {
+  border-color: var(--accent);
+}
+
+.step[data-status="waiting"] {
+  opacity: 0.6;
+}
+
+.step-icon {
+  flex: 0 0 1.35rem;
+  height: 1.35rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  line-height: 1;
+}
+
+.step[data-status="active"] .step-icon {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.step[data-status="active"] .step-icon::before {
+  content: "\2022";
+}
+
+.step[data-status="done"] .step-icon {
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.step[data-status="done"] .step-icon::before {
+  content: "\2713";
+}
+
+.step[data-status="failed"] .step-icon {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+.step[data-status="failed"] .step-icon::before {
+  content: "\00d7";
+}
+
+.step-body {
+  display: grid;
+  gap: 0.1rem;
+}
+
+.step-name {
+  font-weight: 500;
+}
+
+.step-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.widget {
+  margin-top: 1.25rem;
+  display: grid;
+  gap: 0.6rem;
+  justify-items: start;
+}
+
+.widget-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.button {
+  padding: 0.55rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #ffffff;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.button:hover {
+  filter: brightness(1.08);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.button-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+/* Mirrors the official button appearance from telegram-login.js (injectStyles),
+   under a custom class name on purpose: the SDK installs a document-level click
+   handler for .tg-auth-button that calls Telegram.Login.open() and conflicts
+   with the programmatic auth() flow used here. */
+.button-telegram {
+  height: 44px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 22px;
+  background: #119af5;
+  color: #ffffff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.button-telegram::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  background: no-repeat center / 22px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 22 22' fill='none'%3E%3Cpath d='M2.81376 10.5943C7.36914 8.61002 10.406 7.30175 11.9245 6.66971C16.265 4.86489 17.1658 4.55143 17.7542 4.54094C17.8836 4.53874 18.1716 4.57072 18.3596 4.72281C18.5158 4.85097 18.5598 5.0243 18.5818 5.14588C18.6013 5.26745 18.6282 5.54454 18.6062 5.76083C18.3719 8.23138 17.3539 14.2266 16.8363 16.9938C16.619 18.1647 16.1869 18.5572 15.7695 18.5955C14.8613 18.679 14.1728 17.996 13.294 17.42C11.9196 16.5185 11.1433 15.9575 9.80793 15.0779C8.26505 14.0613 9.26594 13.5025 10.1448 12.5895C10.3743 12.3505 14.373 8.71426 14.4487 8.38445C14.4585 8.34319 14.4683 8.18939 14.3755 8.10834C14.2852 8.02705 14.1508 8.05488 14.0532 8.07685C13.914 8.1081 11.7193 9.56015 7.4618 12.4328C6.83928 12.861 6.27536 13.0697 5.76758 13.0587C5.21097 13.0468 4.13689 12.7433 3.3386 12.484C2.3621 12.166 1.5833 11.9977 1.65166 11.4575C1.68583 11.1763 2.07406 10.8884 2.81376 10.5943Z' fill='white'/%3E%3C/svg%3E");
+}
+
+.button-telegram:hover {
+  background: #1090e5;
+}
+
+.button-telegram:focus-visible {
+  outline: 2px solid #119af5;
+  outline-offset: 2px;
+}
+
+.button-telegram:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.button-telegram:disabled:hover {
+  background: #119af5;
+}
+
+.progress {
+  width: 100%;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.progress-bar {
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 120ms linear;
+}
+
+.progress-value {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.status {
+  margin: 1.25rem 0 0;
+  color: var(--muted);
+}
+
+.status-success {
+  color: var(--success);
+}
+
+.status-error {
+  color: var(--error);
+}
+
+.outcome {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+}
+
+.outcome-text {
+  margin: 0;
+  font-weight: 500;
+}
+
+.outcome[data-kind="success"] .outcome-text {
+  color: var(--success);
+}
+
+.outcome[data-kind="error"] .outcome-text {
+  color: var(--error);
+}
+
+.privacy {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.privacy h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.privacy p {
+  margin: 0 0 0.6rem;
+}
+
+.privacy-links {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.25rem;
+}
+
+.privacy a {
+  color: var(--accent);
+}

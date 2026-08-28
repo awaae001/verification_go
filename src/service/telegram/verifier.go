@@ -2,8 +2,11 @@ package telegram
 
 import (
 	"context"
+	"crypto"
 	"crypto/ecdsa"
+	"crypto/ed25519"
 	"crypto/elliptic"
+	"crypto/rsa"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -24,6 +27,15 @@ const (
 	defaultJWKS         = "https://oauth.telegram.org/.well-known/jwks.json"
 	jwksCacheTTL        = time.Hour
 	jwksRefreshCooldown = time.Minute
+)
+
+// Signature algorithms accepted from Telegram. The key set also advertises
+// ES256K, which needs secp256k1 support outside the standard library and is
+// therefore rejected.
+const (
+	algRS256 = "RS256"
+	algES256 = "ES256"
+	algEdDSA = "EdDSA"
 )
 
 type Verifier struct {
@@ -70,9 +82,6 @@ func (v *Verifier) Verify(ctx context.Context, rawToken, expectedNonce string, n
 	if err := json.Unmarshal(headerBytes, &header); err != nil {
 		return model.TelegramUser{}, utils.WrapError(utils.CodeTelegramTokenInvalid, "decode token header JSON", err)
 	}
-	if header.Algorithm != "ES256" {
-		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "unsupported token algorithm")
-	}
 	if header.KeyID == "" {
 		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "token key ID is missing")
 	}
@@ -80,19 +89,8 @@ func (v *Verifier) Verify(ctx context.Context, rawToken, expectedNonce string, n
 	if err != nil {
 		return model.TelegramUser{}, err
 	}
-	publicKey, err := publicKey(key)
-	if err != nil {
+	if err := verifySignature(key, parts[0]+"."+parts[1], signature); err != nil {
 		return model.TelegramUser{}, err
-	}
-	if len(signature) != 64 {
-		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ES256 signature length")
-	}
-
-	digest := sha256.Sum256([]byte(parts[0] + "." + parts[1]))
-	r := new(big.Int).SetBytes(signature[:32])
-	s := new(big.Int).SetBytes(signature[32:])
-	if !ecdsa.Verify(publicKey, digest[:], r, s) {
-		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ID token signature")
 	}
 
 	var claims model.TelegramTokenClaims
@@ -181,22 +179,89 @@ func (v *Verifier) key(ctx context.Context, keyID string, now time.Time) (model.
 	return model.TelegramJWK{}, utils.NewError(utils.CodeTelegramTokenInvalid, "no Telegram key matches token key ID")
 }
 
-func publicKey(key model.TelegramJWK) (*ecdsa.PublicKey, error) {
+// verifySignature checks the JWS signature with the algorithm the key set
+// declares for this key. The token header only selects the key: it cannot
+// choose the signature scheme, so a rewritten "alg" is verified against the
+// scheme Telegram published and fails.
+func verifySignature(key model.TelegramJWK, signingInput string, signature []byte) error {
+	switch key.Algorithm {
+	case algRS256:
+		return verifyRS256(key, signingInput, signature)
+	case algES256:
+		return verifyES256(key, signingInput, signature)
+	case algEdDSA:
+		return verifyEdDSA(key, signingInput, signature)
+	default:
+		return utils.NewError(utils.CodeTelegramKeyUnavailable, "unsupported Telegram key algorithm")
+	}
+}
+
+func verifyRS256(key model.TelegramJWK, signingInput string, signature []byte) error {
+	modulus, err := base64.RawURLEncoding.DecodeString(key.Modulus)
+	if err != nil {
+		return utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK modulus", err)
+	}
+	exponent, err := base64.RawURLEncoding.DecodeString(key.Exponent)
+	if err != nil {
+		return utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK exponent", err)
+	}
+	// crypto/rsa rejects an out-of-range exponent and an insecurely small
+	// modulus, so a malformed key fails verification instead of being used.
+	publicKey := &rsa.PublicKey{
+		N: new(big.Int).SetBytes(modulus),
+		E: int(new(big.Int).SetBytes(exponent).Int64()),
+	}
+	digest := sha256.Sum256([]byte(signingInput))
+	if err := rsa.VerifyPKCS1v15(publicKey, crypto.SHA256, digest[:], signature); err != nil {
+		return utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ID token signature")
+	}
+	return nil
+}
+
+func verifyES256(key model.TelegramJWK, signingInput string, signature []byte) error {
 	xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
 	if err != nil {
-		return nil, utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK x coordinate", err)
+		return utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK x coordinate", err)
 	}
 	yBytes, err := base64.RawURLEncoding.DecodeString(key.Y)
 	if err != nil {
-		return nil, utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK y coordinate", err)
+		return utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK y coordinate", err)
 	}
-	// The key set is fetched from Telegram over HTTPS and is trusted. Malformed
-	// coordinates fail closed: ecdsa.Verify rejects points that are not on P-256.
-	return &ecdsa.PublicKey{
+	// The signature comes from the token, so its length is attacker controlled:
+	// splitting r and s below would panic on a shorter value.
+	if len(signature) != 64 {
+		return utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ES256 signature length")
+	}
+	// ecdsa.Verify rejects coordinates that are not a P-256 point, so malformed
+	// coordinates fail closed here.
+	publicKey := &ecdsa.PublicKey{
 		Curve: elliptic.P256(),
 		X:     new(big.Int).SetBytes(xBytes),
 		Y:     new(big.Int).SetBytes(yBytes),
-	}, nil
+	}
+	digest := sha256.Sum256([]byte(signingInput))
+	r := new(big.Int).SetBytes(signature[:32])
+	s := new(big.Int).SetBytes(signature[32:])
+	if !ecdsa.Verify(publicKey, digest[:], r, s) {
+		return utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ID token signature")
+	}
+	return nil
+}
+
+func verifyEdDSA(key model.TelegramJWK, signingInput string, signature []byte) error {
+	xBytes, err := base64.RawURLEncoding.DecodeString(key.X)
+	if err != nil {
+		return utils.WrapError(utils.CodeTelegramKeyUnavailable, "decode Telegram JWK public key", err)
+	}
+	// Unlike the RSA and ECDSA paths, ed25519.Verify panics on a public key of
+	// the wrong length instead of returning false.
+	if len(xBytes) != ed25519.PublicKeySize {
+		return utils.NewError(utils.CodeTelegramKeyUnavailable, "Telegram JWK public key has the wrong length")
+	}
+	if !ed25519.Verify(ed25519.PublicKey(xBytes), []byte(signingInput), signature) {
+		return utils.NewError(utils.CodeTelegramTokenInvalid, "invalid ID token signature")
+	}
+	return nil
 }
 
 func findKey(keys []model.TelegramJWK, keyID string) (model.TelegramJWK, bool) {

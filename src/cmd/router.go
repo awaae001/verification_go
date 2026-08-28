@@ -7,6 +7,7 @@ import (
 	"tg_verification_go/src/handler"
 	"tg_verification_go/src/middleware"
 	"tg_verification_go/src/model"
+	"tg_verification_go/src/page"
 	"tg_verification_go/src/service"
 	telegramservice "tg_verification_go/src/service/telegram"
 	"tg_verification_go/src/utils"
@@ -43,6 +44,12 @@ func newRouter(config *model.Config, stateStore *service.Store) *gin.Engine {
 	)
 	clientAuth := middleware.ClientAuth(config)
 	antiBot := middleware.NewAntiBot(stateStore)
+	pageRenderer := page.NewRenderer(config, stateStore)
+
+	// The verification page and its assets are intentionally public: they are
+	// read-only and expose only the site key, client ID, and session ID.
+	router.GET("/v/:sid", pageRenderer.Verification)
+	router.GET("/static/*filepath", pageRenderer.Static())
 
 	apiGroup := router.Group("/api")
 	{
