@@ -1,0 +1,55 @@
+/* Document page layout: a single readable column, typography-first. */
+body {
+  padding: 3rem 1.25rem 4rem;
+}
+
+.doc {
+  max-width: 44rem;
+  margin: 0 auto;
+}
+
+.doc-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-header h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.doc-header .doc-meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.doc h2 {
+  margin: 2.25rem 0 0.75rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.doc p {
+  margin: 0 0 0.85rem;
+}
+
+.doc ul {
+  margin: 0 0 0.85rem;
+  padding-left: 1.4rem;
+  display: grid;
+  gap: 0.3rem;
+}
+
+.doc a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.doc a:hover {
+  filter: brightness(1.1);
+}

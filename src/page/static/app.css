@@ -1,51 +1,20 @@
-:root {
-  color-scheme: light dark;
-  --background: #f4f5f7;
-  --surface: #ffffff;
-  --border: #d8dbe0;
-  --text: #14161a;
-  --muted: #5c626d;
-  --accent: #2563eb;
-  --success: #15803d;
-  --error: #b91c1c;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #101216;
-    --surface: #191c22;
-    --border: #2c313a;
-    --text: #eceef2;
-    --muted: #9aa1ad;
-    --accent: #60a5fa;
-    --success: #4ade80;
-    --error: #f87171;
-  }
-}
-
-* {
-  box-sizing: border-box;
-}
-
 body {
-  margin: 0;
+  min-height: 100vh;
   padding: 2rem 1rem;
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
-  background: var(--background);
-  color: var(--text);
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 15px;
-  line-height: 1.55;
 }
 
 .card {
   width: 100%;
   max-width: 34rem;
-  padding: 1.75rem;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface);
+}
+
+.card-header {
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border);
 }
 
 .card-header h1 {
@@ -59,94 +28,80 @@ body {
   color: var(--muted);
 }
 
-.steps {
-  margin: 1.5rem 0 0;
-  padding: 0;
-  list-style: none;
+.stage {
+  margin-top: 1.5rem;
   display: grid;
-  gap: 0.65rem;
+  gap: 0.5rem;
+  justify-items: start;
+  animation: stage-in 200ms ease;
 }
 
-.step {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
-  padding: 0.7rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
+.stage[hidden] {
+  display: none;
 }
 
-.step[data-status="active"] {
-  border-color: var(--accent);
+.stage-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
 }
 
-.step[data-status="waiting"] {
-  opacity: 0.6;
-}
-
-.step-icon {
-  flex: 0 0 1.35rem;
-  height: 1.35rem;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 0.8rem;
-  line-height: 1;
-}
-
-.step[data-status="active"] .step-icon {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.step[data-status="active"] .step-icon::before {
-  content: "\2022";
-}
-
-.step[data-status="done"] .step-icon {
-  border-color: var(--success);
-  color: var(--success);
-}
-
-.step[data-status="done"] .step-icon::before {
-  content: "\2713";
-}
-
-.step[data-status="failed"] .step-icon {
-  border-color: var(--error);
-  color: var(--error);
-}
-
-.step[data-status="failed"] .step-icon::before {
-  content: "\00d7";
-}
-
-.step-body {
-  display: grid;
-  gap: 0.1rem;
-}
-
-.step-name {
-  font-weight: 500;
-}
-
-.step-hint {
+.stage-hint {
+  margin: 0;
   color: var(--muted);
-  font-size: 0.85rem;
+}
+
+@keyframes stage-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.spinner {
+  width: 2rem;
+  height: 2rem;
+  margin-top: 0.5rem;
+  border: 3px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.spinner[hidden] {
+  display: none;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage {
+    animation: none;
+  }
+
+  .spinner {
+    animation: none;
+  }
 }
 
 .widget {
-  margin-top: 1.25rem;
+  margin-top: 0.75rem;
   display: grid;
   gap: 0.6rem;
   justify-items: start;
+  width: 100%;
 }
 
-.widget-label {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.9rem;
+.widget[hidden] {
+  display: none;
 }
 
 .button {
@@ -263,45 +218,37 @@ body {
   justify-items: start;
 }
 
+.outcome-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--error);
+}
+
 .outcome-text {
   margin: 0;
   font-weight: 500;
+}
+
+.outcome-session {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* user-select: all lets users copy the whole ID with one click when
+   reporting a failure. */
+.outcome-session code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  user-select: all;
 }
 
 .outcome[data-kind="success"] .outcome-text {
   color: var(--success);
 }
 
-.outcome[data-kind="error"] .outcome-text {
-  color: var(--error);
-}
 
-.privacy {
-  margin-top: 1.75rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.85rem;
-}
-
-.privacy h2 {
-  margin: 0 0 0.5rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.privacy p {
-  margin: 0 0 0.6rem;
-}
-
-.privacy-links {
-  margin: 0;
-  padding-left: 1.1rem;
-  display: grid;
-  gap: 0.25rem;
-}
-
-.privacy a {
-  color: var(--accent);
-}

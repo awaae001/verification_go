@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"tg_verification_go/src/i18n"
 	"tg_verification_go/src/model"
 	"tg_verification_go/src/service"
 
@@ -49,7 +50,7 @@ func NewRenderer(config *model.Config, stateStore *service.Store) *Renderer {
 	return &Renderer{
 		config:       config,
 		store:        stateStore,
-		template:     template.Must(template.ParseFS(templateFS, "templates/*.html")),
+		template:     template.Must(template.New("page").Funcs(template.FuncMap{"t": i18n.T}).ParseFS(templateFS, "templates/*.html")),
 		assets:       assets,
 		assetVersion: version,
 		now:          time.Now,
@@ -65,9 +66,10 @@ func (r *Renderer) AssetVersion() string {
 func (r *Renderer) Verification(c *gin.Context) {
 	sessionID := c.Param("sid")
 	session, exists := r.store.GetSession(sessionID, r.now())
+	lang := i18n.Resolve(c.Query("lang"), c.GetHeader("Accept-Language"))
 
 	status := http.StatusOK
-	view := model.PageView{State: model.PageStateNotFound, AssetVersion: r.assetVersion}
+	view := model.PageView{State: model.PageStateNotFound, Lang: lang, AssetVersion: r.assetVersion}
 	switch {
 	case !exists:
 		status = http.StatusNotFound
@@ -83,6 +85,8 @@ func (r *Renderer) Verification(c *gin.Context) {
 			TurnstileAction:  r.config.Turnstile.Action,
 			TelegramClientID: r.config.Telegram.ClientID,
 			ExpiresAt:        session.ExpiresAt.Unix(),
+			Lang:             lang,
+			Messages:         i18n.Messages(lang),
 		})
 		if err != nil {
 			log.Printf("[page][verify] failed to encode page config: %v", err)
@@ -98,6 +102,15 @@ func (r *Renderer) Verification(c *gin.Context) {
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	if err := r.template.ExecuteTemplate(c.Writer, "verify.html", view); err != nil {
 		log.Printf("[page][verify] failed to render page: %v", err)
+	}
+}
+
+// Privacy renders the privacy policy page.
+func (r *Renderer) Privacy(c *gin.Context) {
+	c.Header("Cache-Control", "no-store")
+	c.Header("Content-Type", "text/html; charset=utf-8")
+	if err := r.template.ExecuteTemplate(c.Writer, "privacy.html", model.PageView{AssetVersion: r.assetVersion}); err != nil {
+		log.Printf("[page][privacy] failed to render page: %v", err)
 	}
 }
 

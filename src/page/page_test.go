@@ -61,6 +61,59 @@ func TestPageReferencesVersionedAssets(t *testing.T) {
 	}
 }
 
+func TestVerificationPageRendersChinese(t *testing.T) {
+	renderer, store := newTestRenderer(t)
+	engine := newTestEngine(t, renderer)
+	now := time.Now()
+	store.PutSession(model.Session{
+		ID:        "session",
+		Status:    model.SessionStatusPending,
+		CreatedAt: now,
+		ExpiresAt: now.Add(10 * time.Minute),
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v/session", nil)
+	request.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	engine.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `<html lang="zh">`) {
+		t.Fatal("page does not declare lang=zh")
+	}
+	if !strings.Contains(body, "人机验证") {
+		t.Fatal("page does not render the Chinese title")
+	}
+	if strings.Contains(body, "Human Verification") {
+		t.Fatal("page still renders the English title")
+	}
+}
+
+func TestVerificationPageHonorsLangQuery(t *testing.T) {
+	renderer, store := newTestRenderer(t)
+	engine := newTestEngine(t, renderer)
+	now := time.Now()
+	store.PutSession(model.Session{
+		ID:        "session",
+		Status:    model.SessionStatusPending,
+		CreatedAt: now,
+		ExpiresAt: now.Add(10 * time.Minute),
+	})
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/v/session?lang=en", nil)
+	request.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	engine.ServeHTTP(recorder, request)
+
+	body := recorder.Body.String()
+	if !strings.Contains(body, `<html lang="en">`) {
+		t.Fatal("page does not declare lang=en")
+	}
+	if !strings.Contains(body, "Human Verification") {
+		t.Fatal("page does not render the English title")
+	}
+}
+
 func TestServeVersionedAssets(t *testing.T) {
 	renderer, _ := newTestRenderer(t)
 	engine := newTestEngine(t, renderer)

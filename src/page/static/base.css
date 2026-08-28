@@ -1,0 +1,58 @@
+/* Base color tokens. Each token is defined exactly once via light-dark();
+   the browser picks the value from the color-scheme declaration below. */
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#f4f5f7, #101216);
+  --border: light-dark(#d8dbe0, #2c313a);
+  --text: light-dark(#14161a, #eceef2);
+  --muted: light-dark(#5c626d, #9aa1ad);
+  --accent: light-dark(#2563eb, #60a5fa);
+  --success: light-dark(#15803d, #4ade80);
+  --error: light-dark(#b91c1c, #f87171);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.site-footer {
+  position: fixed;
+  right: 1rem;
+  bottom: 0.75rem;
+  text-align: right;
+  color: var(--muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.site-footer p {
+  margin: 0;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-footer a:hover {
+  color: var(--text);
+}
+
+@media (max-width: 40rem) {
+  .site-footer {
+    position: static;
+    margin-top: 1.5rem;
+    text-align: center;
+  }
+}

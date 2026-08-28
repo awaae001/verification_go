@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"time"
 
 	"tg_verification_go/src/handler"
 	"tg_verification_go/src/middleware"
@@ -19,16 +18,7 @@ import (
 func newRouter(config *model.Config, stateStore *service.Store) *gin.Engine {
 	router := gin.New()
 	router.Use(
-		gin.LoggerWithFormatter(func(params gin.LogFormatterParams) string {
-			return fmt.Sprintf(
-				"[cmd][http] %s | %d | %s | %s %s\n",
-				params.TimeStamp.Format(time.RFC3339),
-				params.StatusCode,
-				params.Latency,
-				params.Method,
-				params.Path,
-			)
-		}),
+		gin.Logger(),
 		middleware.ErrorHandler(),
 		gin.CustomRecovery(func(c *gin.Context, recovered any) {
 			utils.AbortWithError(c, fmt.Errorf("panic: %v", recovered))
@@ -49,6 +39,7 @@ func newRouter(config *model.Config, stateStore *service.Store) *gin.Engine {
 	// The verification page and its assets are intentionally public: they are
 	// read-only and expose only the site key, client ID, and session ID.
 	router.GET("/v/:sid", pageRenderer.Verification)
+	router.GET("/privacy", pageRenderer.Privacy)
 	router.GET("/static/*filepath", pageRenderer.Static())
 
 	apiGroup := router.Group("/api")

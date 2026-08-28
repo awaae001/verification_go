@@ -1,125 +1,86 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{.Lang}}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="robots" content="noindex, nofollow">
-  <title>Human Verification</title>
+  <title>{{t .Lang "title"}}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+  <link rel="stylesheet" href="/static/{{.AssetVersion}}/base.css">
   <link rel="stylesheet" href="/static/{{.AssetVersion}}/app.css">
   {{if eq .State "active"}}<script type="application/json" id="page-config">{{.Config}}</script>{{end}}
 </head>
 <body data-state="{{.State}}">
 <main class="card" role="main">
   <header class="card-header">
-    <h1>Human Verification</h1>
+    <h1>{{t .Lang "title"}}</h1>
     {{if eq .State "active"}}
-    <p class="subtitle">Complete the four steps below, then return to the bot and confirm.</p>
+    <p class="subtitle">{{t .Lang "subtitle.active"}}</p>
     {{else if eq .State "done"}}
-    <p class="subtitle">This verification is already complete.</p>
+    <p class="subtitle">{{t .Lang "subtitle.done"}}</p>
     {{else if eq .State "expired"}}
-    <p class="subtitle">This verification link has expired.</p>
+    <p class="subtitle">{{t .Lang "subtitle.expired"}}</p>
     {{else}}
-    <p class="subtitle">This verification link is not valid.</p>
+    <p class="subtitle">{{t .Lang "subtitle.notfound"}}</p>
     {{end}}
   </header>
 
   {{if eq .State "active"}}
-  <ol class="steps" id="steps">
-    <li class="step" id="step-turnstile" data-status="active">
-      <span class="step-icon" aria-hidden="true"></span>
-      <span class="step-body">
-        <span class="step-name">Anti-bot check</span>
-        <span class="step-hint">Cloudflare Turnstile confirms you are not automated.</span>
-      </span>
-    </li>
-    <li class="step" id="step-telegram" data-status="waiting">
-      <span class="step-icon" aria-hidden="true"></span>
-      <span class="step-body">
-        <span class="step-name">Telegram login</span>
-        <span class="step-hint">Proves control of a Telegram account for this session only.</span>
-      </span>
-    </li>
-    <li class="step" id="step-fingerprint" data-status="waiting">
-      <span class="step-icon" aria-hidden="true"></span>
-      <span class="step-body">
-        <span class="step-name">Device profile</span>
-        <span class="step-hint">Uses local audio and WebGPU or Canvas to pick a work starting point. Never uploaded.</span>
-      </span>
-    </li>
-    <li class="step" id="step-pow" data-status="waiting">
-      <span class="step-icon" aria-hidden="true"></span>
-      <span class="step-body">
-        <span class="step-name">Proof of work</span>
-        <span class="step-hint">Your browser searches for a SHA-256 answer.</span>
-      </span>
-    </li>
-  </ol>
+  <section class="stage" id="stage-turnstile" aria-labelledby="stage-turnstile-title">
+    <h2 class="stage-title" id="stage-turnstile-title">{{t .Lang "stage.turnstile.title"}}</h2>
+    <p class="stage-hint">{{t .Lang "stage.turnstile.hint"}}</p>
+    <div class="widget" id="turnstile-widget"></div>
+  </section>
 
-  <div class="widget" id="turnstile-widget"></div>
-
-  <div class="widget" id="telegram-widget" hidden>
-    <p class="widget-label" id="telegram-label">Sign in with Telegram to continue.</p>
-    <button type="button" class="button-telegram" id="telegram-button" aria-describedby="telegram-label">
-      Log in with Telegram
-    </button>
-  </div>
-
-  <div class="widget" id="pow-widget" hidden>
-    <p class="widget-label" id="pow-label">Searching for a valid answer.</p>
-    <div class="progress" role="progressbar" id="pow-progress"
-         aria-labelledby="pow-label" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
-      <div class="progress-bar" id="pow-progress-bar"></div>
+  <section class="stage" id="stage-telegram" aria-labelledby="stage-telegram-title" hidden>
+    <h2 class="stage-title" id="stage-telegram-title">{{t .Lang "stage.telegram.title"}}</h2>
+    <p class="stage-hint">{{t .Lang "stage.telegram.hint"}}</p>
+    <div class="widget" id="telegram-widget">
+      <button type="button" class="button-telegram" id="telegram-button">
+        {{t .Lang "stage.telegram.button"}}
+      </button>
     </div>
-    <p class="progress-value" id="pow-progress-value">0.0%</p>
-  </div>
+  </section>
 
-  <p class="status" id="status" role="status" aria-live="polite">Waiting for the anti-bot check.</p>
+  <section class="stage" id="stage-confirm" aria-labelledby="stage-confirm-title" hidden>
+    <h2 class="stage-title" id="stage-confirm-title">{{t .Lang "stage.confirm.title"}}</h2>
+    <p class="stage-hint">{{t .Lang "stage.confirm.hint"}}</p>
+    <div class="spinner" id="confirm-spinner" aria-hidden="true"></div>
+    <div class="widget widget-progress" id="pow-widget" hidden>
+      <div class="progress" role="progressbar" id="pow-progress"
+           aria-label="{{t .Lang "confirm.progress.aria"}}" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-bar" id="pow-progress-bar"></div>
+      </div>
+      <p class="progress-value" id="pow-progress-value">0.0%</p>
+    </div>
+  </section>
+
+  <p class="status" id="status" role="status" aria-live="polite">{{t .Lang "status.loading"}}</p>
 
   <div class="outcome" id="outcome" hidden>
+    <p class="outcome-title" id="outcome-title" hidden>{{t .Lang "outcome.error"}}</p>
     <p class="outcome-text" id="outcome-text"></p>
-    <button type="button" class="button button-secondary" id="retry-button" hidden>Try again</button>
+    <p class="outcome-session" id="outcome-session" hidden>
+      {{t .Lang "outcome.sessionid"}} <code id="outcome-session-id"></code>
+    </p>
+    <button type="button" class="button button-secondary" id="retry-button" hidden>{{t .Lang "outcome.retry"}}</button>
   </div>
   {{else if eq .State "done"}}
-  <p class="status status-success">Verification complete. You can close this page and confirm in the bot.</p>
+  <p class="status status-success">{{t .Lang "state.done"}}</p>
   {{else if eq .State "expired"}}
-  <p class="status status-error">Ask the bot for a new verification link.</p>
+  <p class="status status-error">{{t .Lang "state.expired"}}</p>
   {{else}}
-  <p class="status status-error">Ask the bot for a new verification link.</p>
+  <p class="status status-error">{{t .Lang "state.notfound"}}</p>
   {{end}}
 
-  <footer class="privacy">
-    <h2>Privacy</h2>
-    <p>
-      This verification collects a locally computed device profile (audio plus WebGPU or Canvas characteristics)
-      and your Telegram login state for the sole purpose of completing this one check.
-      The device profile never leaves your browser. The server keeps only the short-lived
-      verification state for this session and discards it automatically; it stores none of your data
-      permanently.
-    </p>
-    <p>
-      You can revoke this authorization immediately in Telegram under
-      <em>Settings &rarr; Privacy and Security &rarr; Connected Websites</em>.
-    </p>
-    <ul class="privacy-links">
-      <li>
-        For Turnstile and CDNJS, see the
-        <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noopener noreferrer">Cloudflare Privacy Policy</a>.
-      </li>
-      <li>
-        For Telegram, see the
-        <a href="https://telegram.org/privacy" target="_blank" rel="noopener noreferrer">Telegram Privacy Policy</a>.
-      </li>
-      <li>
-        For Google Fonts, see
-        <a href="https://policies.google.com/" target="_blank" rel="noopener noreferrer">Google Privacy &amp; Terms</a>.
-      </li>
-    </ul>
-  </footer>
 </main>
+<footer class="site-footer">
+  <p>powered by go · <a href="/privacy" target="_blank" rel="noopener noreferrer">{{t .Lang "footer.privacy"}}</a></p>
+  <p>&copy; 2026 jiuci_network All rights reserved.</p>
+</footer>
 {{if eq .State "active"}}<script src="/static/{{.AssetVersion}}/app.js" type="module"></script>{{end}}
 </body>
 </html>

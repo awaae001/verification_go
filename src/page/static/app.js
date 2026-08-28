@@ -3,18 +3,36 @@ import { computeStartOffset, UnsupportedBrowserError } from "./fingerprint.js";
 
 const config = JSON.parse(document.getElementById("page-config").textContent);
 
+// The server embeds the full message table for the resolved page language
+// (merged over English) into the page config, so this lookup is the only
+// translation layer the script needs.
+const messages = config.messages || {};
+function msg(key) {
+  const value = messages[key];
+  return typeof value === "string" && value !== "" ? value : null;
+}
+
 const elements = {
   turnstileWidget: document.getElementById("turnstile-widget"),
-  telegramWidget: document.getElementById("telegram-widget"),
   telegramButton: document.getElementById("telegram-button"),
+  confirmSpinner: document.getElementById("confirm-spinner"),
   powWidget: document.getElementById("pow-widget"),
   powProgress: document.getElementById("pow-progress"),
   powProgressBar: document.getElementById("pow-progress-bar"),
   powProgressValue: document.getElementById("pow-progress-value"),
   status: document.getElementById("status"),
   outcome: document.getElementById("outcome"),
+  outcomeTitle: document.getElementById("outcome-title"),
   outcomeText: document.getElementById("outcome-text"),
+  outcomeSession: document.getElementById("outcome-session"),
+  outcomeSessionID: document.getElementById("outcome-session-id"),
   retryButton: document.getElementById("retry-button"),
+};
+
+const stages = {
+  turnstile: document.getElementById("stage-turnstile"),
+  telegram: document.getElementById("stage-telegram"),
+  confirm: document.getElementById("stage-confirm"),
 };
 
 const session = {
@@ -28,15 +46,17 @@ const session = {
   requestIDToken: null,
 };
 
-const TERMINAL_MESSAGES = {
-  SESSION_NOT_FOUND: "This verification session no longer exists. Ask the bot for a new link.",
-  SESSION_EXPIRED: "This verification session has expired. Ask the bot for a new link.",
-  ANTIBOT_REQUIRED: "This verification session is no longer valid. Ask the bot for a new link.",
-  STATE_CONFLICT: "This verification session is no longer valid. Ask the bot for a new link.",
-  TURNSTILE_UNAVAILABLE: "The anti-bot service is unavailable. Please try again later.",
-  TELEGRAM_KEY_UNAVAILABLE: "Telegram verification is unavailable. Please try again later.",
-  INTERNAL_ERROR: "The verification service failed. Please try again later.",
-};
+// API error codes that leave the session unusable; their messages come from
+// the "terminal.<CODE>" i18n keys.
+const TERMINAL_CODES = new Set([
+  "SESSION_NOT_FOUND",
+  "SESSION_EXPIRED",
+  "ANTIBOT_REQUIRED",
+  "STATE_CONFLICT",
+  "TURNSTILE_UNAVAILABLE",
+  "TELEGRAM_KEY_UNAVAILABLE",
+  "INTERNAL_ERROR",
+]);
 
 class ApiError extends Error {
   constructor(code, message) {
@@ -73,11 +93,14 @@ async function post(path, body) {
   return payload;
 }
 
-function setStep(name, status) {
-  const step = document.getElementById(`step-${name}`);
-  if (step) {
-    step.dataset.status = status;
+function showStage(name) {
+  for (const [key, section] of Object.entries(stages)) {
+    section.hidden = key !== name;
   }
+}
+
+function hideStages() {
+  showStage("");
 }
 
 function setStatus(text) {
@@ -88,17 +111,23 @@ function showOutcome(kind, text, retry) {
   elements.outcome.hidden = false;
   elements.outcome.dataset.kind = kind;
   elements.outcomeText.textContent = text;
+  // Errors get a support-style header and the session ID so users can quote
+  // it when asking for help; success stays a single line.
+  const isError = kind === "error";
+  elements.outcomeTitle.hidden = !isError;
+  elements.outcomeSession.hidden = !isError;
+  if (isError) {
+    elements.outcomeSessionID.textContent = config.session_id;
+  }
   elements.retryButton.hidden = !retry;
   elements.retryButton.onclick = retry || null;
 }
 
 function terminate(code, fallback) {
   stopWorker();
-  elements.telegramWidget.hidden = true;
-  elements.turnstileWidget.hidden = true;
-  elements.powWidget.hidden = true;
-  setStatus("Verification stopped.");
-  showOutcome("error", TERMINAL_MESSAGES[code] || fallback, null);
+  hideStages();
+  setStatus(msg("status.stopped"));
+  showOutcome("error", msg(`terminal.${code}`) || fallback, null);
 }
 
 function stopWorker() {
@@ -114,17 +143,16 @@ function setProgress(percentage) {
   elements.powProgressValue.textContent = `${percentage.toFixed(1)}%`;
 }
 
-function handleFailure(step, error, retry) {
-  console.debug(`[page][${step}] failed`, error);
-  setStep(step, "failed");
+function handleFailure(error, retry) {
+  console.debug("[page][verify] failed", error);
   if (!(error instanceof ApiError)) {
-    showOutcome("error", error.message || "Verification failed.", retry);
-    setStatus("Verification failed.");
+    showOutcome("error", error.message || msg("status.failed"), retry);
+    setStatus(msg("status.failed"));
     return;
   }
-  if (retry && (error.code === "NETWORK_ERROR" || !TERMINAL_MESSAGES[error.code])) {
+  if (retry && (error.code === "NETWORK_ERROR" || !TERMINAL_CODES.has(error.code))) {
     showOutcome("error", error.message, retry);
-    setStatus("Verification failed.");
+    setStatus(msg("status.failed"));
     return;
   }
   terminate(error.code, error.message);
@@ -139,9 +167,8 @@ function startTurnstile() {
         submitTurnstile(token);
       },
       "error-callback": () => {
-        setStep("turnstile", "failed");
-        setStatus("Verification failed.");
-        showOutcome("error", "The anti-bot check could not be completed.", resetTurnstile);
+        setStatus(msg("status.failed"));
+        showOutcome("error", msg("error.turnstile_failed"), resetTurnstile);
       },
       "expired-callback": () => {
         resetTurnstile();
@@ -154,55 +181,50 @@ function startTurnstile() {
   script.async = true;
   script.defer = true;
   script.onerror = () => {
-    setStep("turnstile", "failed");
-    showOutcome("error", "The anti-bot script could not be loaded.", null);
+    setStatus(msg("status.failed"));
+    showOutcome("error", msg("error.turnstile_script"), null);
   };
   document.head.appendChild(script);
 }
 
 function resetTurnstile() {
   elements.outcome.hidden = true;
-  elements.telegramWidget.hidden = true;
-  setStep("turnstile", "active");
-  setStep("telegram", "waiting");
-  setStatus("Waiting for the anti-bot check.");
+  showStage("turnstile");
+  setStatus(msg("status.turnstile_waiting"));
   if (session.turnstileWidgetID !== null) {
     window.turnstile.reset(session.turnstileWidgetID);
   }
 }
 
 async function submitTurnstile(token) {
-  setStatus("Checking the anti-bot response.");
+  setStatus(msg("status.checking"));
   try {
     const result = await post("/antibot", { token });
     session.antiBotToken = result.antibot_token;
     session.nonce = result.nonce;
   } catch (error) {
-    handleFailure("turnstile", error, error.code === "TURNSTILE_FAILED" ? resetTurnstile : null);
+    handleFailure(error, error.code === "TURNSTILE_FAILED" ? resetTurnstile : null);
     return;
   }
-  setStep("turnstile", "done");
-  elements.turnstileWidget.hidden = true;
   await startTelegram();
 }
 
 async function startTelegram() {
-  setStep("telegram", "active");
-  setStatus("Preparing Telegram login.");
+  setStatus(msg("status.telegram_preparing"));
   try {
     session.requestIDToken = await prepareTelegramLogin(config.telegram_client_id, session.nonce);
   } catch (error) {
-    handleFailure("telegram", error, null);
+    handleFailure(error, null);
     return;
   }
   elements.outcome.hidden = true;
-  elements.telegramWidget.hidden = false;
-  setStatus("Sign in with Telegram to continue.");
+  showStage("telegram");
+  setStatus(msg("status.telegram_ready"));
 }
 
 async function submitTelegram() {
   elements.telegramButton.disabled = true;
-  setStatus("Verifying your Telegram login.");
+  setStatus(msg("status.telegram_connecting"));
   try {
     const idToken = await session.requestIDToken();
     const result = await post("/telegram", { nonce: session.nonce, id_token: idToken });
@@ -212,27 +234,28 @@ async function submitTelegram() {
     const retry = !(error instanceof ApiError) || error.code === "TELEGRAM_TOKEN_INVALID"
       ? () => {
           elements.outcome.hidden = true;
-          setStep("telegram", "active");
-          setStatus("Sign in with Telegram to continue.");
+          setStatus(msg("status.telegram_ready"));
         }
       : null;
-    handleFailure("telegram", error, retry);
+    handleFailure(error, retry);
     return;
   }
-  setStep("telegram", "done");
-  elements.telegramWidget.hidden = true;
-  await startFingerprint();
+  await startConfirmation();
 }
 
-async function startFingerprint() {
-  setStep("fingerprint", "active");
-  setStatus("Profiling this device locally.");
+// Fingerprinting and proof of work run back to back without user input, so
+// they share one "we are confirming" stage on screen.
+async function startConfirmation() {
+  showStage("confirm");
+  elements.confirmSpinner.hidden = false;
+  elements.powWidget.hidden = true;
+  setStatus(msg("status.confirming"));
 
   let challenge;
   try {
     challenge = await post("/challenge", { pow_token: session.powToken });
   } catch (error) {
-    handleFailure("fingerprint", error, null);
+    handleFailure(error, null);
     return;
   }
   session.challenge = challenge.challenge;
@@ -241,22 +264,20 @@ async function startFingerprint() {
     session.startOffset = await computeStartOffset(challenge.maximum_work);
   } catch (error) {
     console.debug("[page][fingerprint] failed", error);
-    setStep("fingerprint", "failed");
-    setStatus("Verification stopped.");
+    setStatus(msg("status.stopped"));
     const message = error instanceof UnsupportedBrowserError
-      ? "This browser cannot produce the required local audio or visual profile."
-      : "The device profile could not be computed.";
+      ? msg("error.unsupported_browser")
+      : msg("error.fingerprint");
     showOutcome("error", message, null);
     return;
   }
-  setStep("fingerprint", "done");
   startProofOfWork(challenge.difficulty, challenge.maximum_work);
 }
 
 function startProofOfWork(difficulty, maximumWork) {
-  setStep("pow", "active");
-  setStatus("Solving the proof of work. Keep this page open.");
+  setStatus(msg("status.pow"));
   elements.outcome.hidden = true;
+  elements.confirmSpinner.hidden = true;
   elements.powWidget.hidden = false;
   setProgress(0);
 
@@ -276,16 +297,14 @@ function startProofOfWork(difficulty, maximumWork) {
       return;
     }
     stopWorker();
-    setStep("pow", "failed");
-    setStatus("Verification failed.");
-    showOutcome("error", "The proof of work failed.", () => startProofOfWork(difficulty, maximumWork));
+    setStatus(msg("status.failed"));
+    showOutcome("error", msg("error.pow"), () => startProofOfWork(difficulty, maximumWork));
   };
   session.worker.onerror = (event) => {
     console.debug("[page][pow] worker error", event.message);
     stopWorker();
-    setStep("pow", "failed");
-    setStatus("Verification failed.");
-    showOutcome("error", "The proof-of-work worker could not run.", null);
+    setStatus(msg("status.failed"));
+    showOutcome("error", msg("error.pow_worker"), null);
   };
   session.worker.postMessage({
     challenge: session.challenge,
@@ -296,7 +315,7 @@ function startProofOfWork(difficulty, maximumWork) {
 }
 
 async function submitSolution(solution, difficulty, maximumWork) {
-  setStatus("Submitting the answer for confirmation.");
+  setStatus(msg("status.submitting"));
   try {
     await post("/pow", { challenge: session.challenge, solution });
   } catch (error) {
@@ -305,13 +324,12 @@ async function submitSolution(solution, difficulty, maximumWork) {
     const retry = !(error instanceof ApiError) || error.code === "POW_SOLUTION_INVALID"
       ? () => startProofOfWork(difficulty, maximumWork)
       : null;
-    handleFailure("pow", error, retry);
+    handleFailure(error, retry);
     return;
   }
-  setStep("pow", "done");
-  elements.powWidget.hidden = true;
-  setStatus("Verification complete.");
-  showOutcome("success", "Verification complete. Return to the bot and confirm.", null);
+  hideStages();
+  setStatus(msg("status.complete"));
+  showOutcome("success", msg("outcome.success"), null);
 }
 
 elements.telegramButton.addEventListener("click", () => {
