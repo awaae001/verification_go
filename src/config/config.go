@@ -156,6 +156,9 @@ func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 	if telegramClientID := v.GetString("TELEGRAM_CLIENT_ID"); telegramClientID != "" {
 		cfg.Telegram.ClientID = telegramClientID
 	}
+	if publicBaseURL := v.GetString("PUBLIC_BASE_URL"); publicBaseURL != "" {
+		cfg.PublicBaseURL = publicBaseURL
+	}
 	if keys := v.GetString("TRUSTED_CLIENT_KEYS"); keys != "" {
 		cfg.TrustedClientKeys = map[string]string{}
 		for _, pair := range strings.Split(keys, ",") {
@@ -167,7 +170,14 @@ func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 		}
 	}
 
-	if cfg.PoW.Difficulty <= 0 {
+	// Drop empty entries so that no request header can match an empty key.
+	for name, key := range cfg.TrustedClientKeys {
+		if name == "" || key == "" {
+			delete(cfg.TrustedClientKeys, name)
+		}
+	}
+
+	if cfg.PoW.Difficulty <= 0 || cfg.PoW.Difficulty > model.MaxPoWDifficulty {
 		cfg.PoW.Difficulty = 6
 	}
 	if cfg.PoW.MaximumWork <= 0 {
@@ -175,6 +185,9 @@ func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 	}
 	if cfg.State.TTLSeconds <= 0 {
 		cfg.State.TTLSeconds = 600
+	}
+	if cfg.State.VerifiedRetentionSeconds <= 0 {
+		cfg.State.VerifiedRetentionSeconds = 3600
 	}
 
 	return nil

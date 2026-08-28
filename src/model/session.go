@@ -10,13 +10,9 @@ const (
 	SessionStatusExpired  SessionStatus = "expired"
 )
 
-type TelegramUser struct {
-	ID   int64
-	Name string
-}
-
 type Session struct {
 	ID         string
+	Client     string
 	Status     SessionStatus
 	User       TelegramUser
 	CreatedAt  time.Time
@@ -24,11 +20,9 @@ type Session struct {
 	VerifiedAt time.Time
 }
 
-// EffectiveStatus maps overdue pending sessions to expired. Verified sessions
-// never report expired: the bot may poll the result after ephemeral states
-// have been swept.
-func (s *Session) EffectiveStatus(now time.Time) SessionStatus {
-	if s.Status == SessionStatusPending && now.After(s.ExpiresAt) {
+// EffectiveStatus maps overdue pending sessions to expired.
+func (s Session) EffectiveStatus(now time.Time) SessionStatus {
+	if s.Status == SessionStatusPending && !now.Before(s.ExpiresAt) {
 		return SessionStatusExpired
 	}
 	return s.Status

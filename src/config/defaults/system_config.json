@@ -1,9 +1,10 @@
 {
   "system_conf": {
+    "base_url": "",
     "turnstile_conf": {
       "site_key": "",
       "secret": "",
-      "action": ""
+      "action": "verification"
     },
     "telegram_conf": {
       "client_id": ""
@@ -13,7 +14,8 @@
       "maximum_work": 268435456
     },
     "state_conf": {
-      "ttl_seconds": 600
+      "ttl_seconds": 600,
+      "verified_retention_seconds": 3600
     },
     "trusted_client_keys": {}
   }

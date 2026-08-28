@@ -12,6 +12,5 @@ type CreateChallengeResponse struct {
 
 type VerifyPoWRequest struct {
 	Challenge string `json:"challenge" binding:"required"`
-	// zero is a valid solution, so no binding:"required" here
-	Solution int64 `json:"solution"`
+	Solution  int64  `json:"solution"`
 }
