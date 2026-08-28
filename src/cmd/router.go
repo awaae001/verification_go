@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"time"
 
 	"tg_verification_go/src/handler"
 	"tg_verification_go/src/middleware"
@@ -31,6 +32,12 @@ func newRouter(config *model.Config, stateStore *service.Store) *gin.Engine {
 		stateStore,
 		config.Turnstile.Secret,
 		config.Turnstile.Action,
+		service.TurnstileLimits{
+			MaxConcurrent:             config.Turnstile.MaxConcurrentVerifications,
+			MaxVerificationsPerMinute: config.Turnstile.MaxVerificationsPerMinute,
+			MaxAttempts:               config.Turnstile.MaxAttemptsPerSession,
+			RetryInterval:             time.Duration(config.Turnstile.RetryIntervalMilliseconds) * time.Millisecond,
+		},
 	)
 	clientAuth := middleware.ClientAuth(config)
 	antiBot := middleware.NewAntiBot(stateStore)

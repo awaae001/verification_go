@@ -177,6 +177,18 @@ func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 		}
 	}
 
+	if cfg.Turnstile.MaxConcurrentVerifications <= 0 {
+		cfg.Turnstile.MaxConcurrentVerifications = 32
+	}
+	if cfg.Turnstile.MaxVerificationsPerMinute <= 0 {
+		cfg.Turnstile.MaxVerificationsPerMinute = 300
+	}
+	if cfg.Turnstile.MaxAttemptsPerSession <= 0 {
+		cfg.Turnstile.MaxAttemptsPerSession = 5
+	}
+	if cfg.Turnstile.RetryIntervalMilliseconds <= 0 {
+		cfg.Turnstile.RetryIntervalMilliseconds = 1000
+	}
 	if cfg.PoW.Difficulty <= 0 || cfg.PoW.Difficulty > model.MaxPoWDifficulty {
 		cfg.PoW.Difficulty = 6
 	}
@@ -188,6 +200,12 @@ func unmarshalConfig(v *viper.Viper, cfg *model.Config) error {
 	}
 	if cfg.State.VerifiedRetentionSeconds <= 0 {
 		cfg.State.VerifiedRetentionSeconds = 3600
+	}
+	if cfg.State.MaxSessions <= 0 {
+		cfg.State.MaxSessions = 10000
+	}
+	if cfg.State.MaxSessionsPerClient <= 0 {
+		cfg.State.MaxSessionsPerClient = 1000
 	}
 
 	return nil

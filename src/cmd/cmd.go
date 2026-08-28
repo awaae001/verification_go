@@ -24,10 +24,12 @@ func Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	stateStore := service.NewStore(
-		time.Duration(cfg.State.TTLSeconds)*time.Second,
-		time.Duration(cfg.State.VerifiedRetentionSeconds)*time.Second,
-	)
+	stateStore := service.NewStore(service.StoreConfig{
+		TTL:                  time.Duration(cfg.State.TTLSeconds) * time.Second,
+		VerifiedRetention:    time.Duration(cfg.State.VerifiedRetentionSeconds) * time.Second,
+		MaxSessions:          cfg.State.MaxSessions,
+		MaxSessionsPerClient: cfg.State.MaxSessionsPerClient,
+	})
 	stateStore.StartJanitor(ctx, time.Minute)
 
 	server := &http.Server{

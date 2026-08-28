@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"tg_verification_go/src/middleware"
 	"tg_verification_go/src/model"
 	"tg_verification_go/src/model/dto"
+	"tg_verification_go/src/service"
 	"tg_verification_go/src/utils"
 
 	"github.com/gin-gonic/gin"
@@ -30,8 +32,16 @@ func (h *Handler) CreateSession(c *gin.Context) {
 			CreatedAt: now,
 			ExpiresAt: now.Add(h.store.TTL()),
 		}
-		if !h.store.PutSession(session) {
-			continue
+		if err := h.store.PutSession(session); err != nil {
+			if errors.Is(err, service.ErrSessionExists) {
+				continue
+			}
+			if errors.Is(err, service.ErrSessionCapacity) || errors.Is(err, service.ErrClientSessionCapacity) {
+				utils.AbortWithError(c, utils.NewError(utils.CodeRateLimited, "session capacity reached"))
+				return
+			}
+			utils.AbortWithError(c, utils.WrapError(utils.CodeInternal, "failed to store session", err))
+			return
 		}
 		baseURL := strings.TrimRight(h.config.PublicBaseURL, "/")
 		if baseURL == "" {

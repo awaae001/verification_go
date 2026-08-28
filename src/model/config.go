@@ -35,9 +35,13 @@ func (c *Config) IsTrustedClient(key string) (string, bool) {
 }
 
 type TurnstileConfig struct {
-	SiteKey string `mapstructure:"site_key"`
-	Secret  string `mapstructure:"secret"`
-	Action  string `mapstructure:"action"`
+	SiteKey                    string `mapstructure:"site_key"`
+	Secret                     string `mapstructure:"secret"`
+	Action                     string `mapstructure:"action"`
+	MaxConcurrentVerifications int    `mapstructure:"max_concurrent_verifications"`
+	MaxVerificationsPerMinute  int    `mapstructure:"max_verifications_per_minute"`
+	MaxAttemptsPerSession      int    `mapstructure:"max_attempts_per_session"`
+	RetryIntervalMilliseconds  int    `mapstructure:"retry_interval_milliseconds"`
 }
 
 type TelegramConfig struct {
@@ -52,4 +56,6 @@ type PoWConfig struct {
 type StateConfig struct {
 	TTLSeconds               int `mapstructure:"ttl_seconds"`
 	VerifiedRetentionSeconds int `mapstructure:"verified_retention_seconds"`
+	MaxSessions              int `mapstructure:"max_sessions"`
+	MaxSessionsPerClient     int `mapstructure:"max_sessions_per_client"`
 }

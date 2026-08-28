@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"sync"
 	"time"
 
@@ -19,29 +20,65 @@ const (
 	stageVerified
 )
 
+type turnstileStartResult uint8
+
+const (
+	turnstileStarted turnstileStartResult = iota
+	turnstileSessionInactive
+	turnstileStageConflict
+	turnstileAttemptInFlight
+	turnstileRetryTooSoon
+	turnstileAttemptsExhausted
+)
+
 type sessionState struct {
-	session      model.Session
-	stage        verificationStage
-	antiBotToken string
-	nonce        string
-	powToken     string
-	challenge    string
-	user         model.TelegramUser
+	session              model.Session
+	stage                verificationStage
+	antiBotToken         string
+	nonce                string
+	powToken             string
+	challenge            string
+	user                 model.TelegramUser
+	turnstileInFlight    bool
+	turnstileAttempts    int
+	turnstileLastAttempt time.Time
 }
 
+var (
+	// ErrSessionExists indicates that a session ID is already stored.
+	ErrSessionExists = errors.New("session already exists")
+	// ErrSessionCapacity indicates that the global session limit was reached.
+	ErrSessionCapacity = errors.New("session capacity reached")
+	// ErrClientSessionCapacity indicates that a client's session limit was reached.
+	ErrClientSessionCapacity = errors.New("client session capacity reached")
+)
+
 type Store struct {
-	mu                sync.Mutex
-	ttl               time.Duration
-	verifiedRetention time.Duration
-	sessions          map[string]sessionState
+	mu                   sync.Mutex
+	ttl                  time.Duration
+	verifiedRetention    time.Duration
+	maxSessions          int
+	maxSessionsPerClient int
+	sessions             map[string]sessionState
+	clientSessions       map[string]int
+}
+
+type StoreConfig struct {
+	TTL                  time.Duration
+	VerifiedRetention    time.Duration
+	MaxSessions          int
+	MaxSessionsPerClient int
 }
 
 // NewStore creates an empty in-memory verification state store.
-func NewStore(ttl, verifiedRetention time.Duration) *Store {
+func NewStore(config StoreConfig) *Store {
 	return &Store{
-		ttl:               ttl,
-		verifiedRetention: verifiedRetention,
-		sessions:          make(map[string]sessionState),
+		ttl:                  config.TTL,
+		verifiedRetention:    config.VerifiedRetention,
+		maxSessions:          config.MaxSessions,
+		maxSessionsPerClient: config.MaxSessionsPerClient,
+		sessions:             make(map[string]sessionState),
+		clientSessions:       make(map[string]int),
 	}
 }
 
@@ -50,15 +87,23 @@ func (s *Store) TTL() time.Duration {
 	return s.ttl
 }
 
-// PutSession stores a new session unless its ID already exists.
-func (s *Store) PutSession(session model.Session) bool {
+// PutSession stores a new session and reports ID collisions or capacity limits.
+func (s *Store) PutSession(session model.Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.removeExpiredLocked(session.CreatedAt)
 	if _, exists := s.sessions[session.ID]; exists {
-		return false
+		return ErrSessionExists
+	}
+	if len(s.sessions) >= s.maxSessions {
+		return ErrSessionCapacity
+	}
+	if s.clientSessions[session.Client] >= s.maxSessionsPerClient {
+		return ErrClientSessionCapacity
 	}
 	s.sessions[session.ID] = sessionState{session: session, stage: stageCreated}
-	return true
+	s.clientSessions[session.Client]++
+	return nil
 }
 
 // GetSession returns a copy of a session with its effective status.
@@ -82,27 +127,71 @@ func (s *Store) IsSessionActive(id string, now time.Time) bool {
 	return exists && state.session.EffectiveStatus(now) == model.SessionStatusPending
 }
 
-// PassTurnstile atomically records anti-bot proof and returns the credentials
-// for the Telegram stage. Repeated proofs at the same stage return the original
-// credentials instead of resetting the session.
-func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Time) (string, string, bool) {
+func (s *Store) beginTurnstile(sessionID string, now time.Time, maxAttempts int, retryInterval time.Duration) turnstileStartResult {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state, exists := s.sessions[sessionID]
 	if !exists || state.session.EffectiveStatus(now) != model.SessionStatusPending {
-		return "", "", false
+		return turnstileSessionInactive
+	}
+	if state.stage != stageCreated {
+		return turnstileStageConflict
+	}
+	if state.turnstileInFlight {
+		return turnstileAttemptInFlight
+	}
+	if state.turnstileAttempts >= maxAttempts {
+		return turnstileAttemptsExhausted
+	}
+	if !state.turnstileLastAttempt.IsZero() && now.Sub(state.turnstileLastAttempt) < retryInterval {
+		return turnstileRetryTooSoon
+	}
+	state.turnstileInFlight = true
+	s.sessions[sessionID] = state
+	return turnstileStarted
+}
+
+func (s *Store) recordTurnstileAttempt(sessionID string, now time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, exists := s.sessions[sessionID]
+	if !exists || !state.turnstileInFlight {
+		return
+	}
+	state.turnstileAttempts++
+	state.turnstileLastAttempt = now
+	s.sessions[sessionID] = state
+}
+
+func (s *Store) finishTurnstileAttempt(sessionID string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, exists := s.sessions[sessionID]
+	if !exists {
+		return
+	}
+	state.turnstileInFlight = false
+	s.sessions[sessionID] = state
+}
+
+// PassTurnstile atomically records anti-bot proof and returns the credentials and session expiration for the Telegram stage.
+func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Time) (string, string, time.Time, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	state, exists := s.sessions[sessionID]
+	if !exists || state.session.EffectiveStatus(now) != model.SessionStatusPending {
+		return "", "", time.Time{}, false
 	}
 	switch state.stage {
-	case stageAntiBotPassed:
-		return state.antiBotToken, state.nonce, true
 	case stageCreated:
 		state.stage = stageAntiBotPassed
 		state.antiBotToken = antiBotToken
 		state.nonce = nonce
+		state.turnstileInFlight = false
 		s.sessions[sessionID] = state
-		return antiBotToken, nonce, true
+		return antiBotToken, nonce, state.session.ExpiresAt, true
 	default:
-		return "", "", false
+		return "", "", time.Time{}, false
 	}
 }
 
@@ -200,19 +289,27 @@ func (s *Store) StartJanitor(ctx context.Context, interval time.Duration) {
 				return
 			case now := <-ticker.C:
 				s.mu.Lock()
-				for id, state := range s.sessions {
-					removeAt := state.session.ExpiresAt.Add(s.verifiedRetention)
-					if state.stage == stageVerified {
-						removeAt = state.session.VerifiedAt.Add(s.verifiedRetention)
-					}
-					if !now.Before(removeAt) {
-						delete(s.sessions, id)
-					}
-				}
+				s.removeExpiredLocked(now)
 				s.mu.Unlock()
 			}
 		}
 	}()
+}
+
+func (s *Store) removeExpiredLocked(now time.Time) {
+	for id, state := range s.sessions {
+		removeAt := state.session.ExpiresAt
+		if state.stage == stageVerified {
+			removeAt = state.session.VerifiedAt.Add(s.verifiedRetention)
+		}
+		if !now.Before(removeAt) {
+			delete(s.sessions, id)
+			s.clientSessions[state.session.Client]--
+			if s.clientSessions[state.session.Client] == 0 {
+				delete(s.clientSessions, state.session.Client)
+			}
+		}
+	}
 }
 
 func equalToken(expected, actual string) bool {

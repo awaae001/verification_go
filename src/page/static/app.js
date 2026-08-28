@@ -210,7 +210,11 @@ async function submitTurnstile(token) {
     session.nonce = result.nonce;
   } catch (error) {
     session.turnstilePending = false;
-    handleFailure(error, error.code === "TURNSTILE_FAILED" ? resetTurnstile : null);
+    const canRetry = error.code === "TURNSTILE_FAILED" || error.code === "RATE_LIMITED";
+    if (error.code === "RATE_LIMITED") {
+      error.message = msg("error.turnstile_rate");
+    }
+    handleFailure(error, canRetry ? resetTurnstile : null);
     return;
   }
   if (session.turnstileWidgetID !== null && window.turnstile && typeof window.turnstile.remove === "function") {

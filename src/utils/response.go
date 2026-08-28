@@ -20,6 +20,7 @@ const (
 	CodeTelegramTokenInvalid   ErrorCode = "TELEGRAM_TOKEN_INVALID"
 	CodeTelegramKeyUnavailable ErrorCode = "TELEGRAM_KEY_UNAVAILABLE"
 	CodeStateConflict          ErrorCode = "STATE_CONFLICT"
+	CodeRateLimited            ErrorCode = "RATE_LIMITED"
 	CodePoWSolutionInvalid     ErrorCode = "POW_SOLUTION_INVALID"
 	CodeInternal               ErrorCode = "INTERNAL_ERROR"
 )
@@ -98,6 +99,8 @@ func statusForCode(code ErrorCode) int {
 		return http.StatusForbidden
 	case CodeStateConflict:
 		return http.StatusConflict
+	case CodeRateLimited:
+		return http.StatusTooManyRequests
 	case CodeSessionExpired:
 		return http.StatusGone
 	case CodePoWSolutionInvalid:

@@ -4,7 +4,11 @@
     "turnstile_conf": {
       "site_key": "",
       "secret": "",
-      "action": "verification"
+      "action": "verification",
+      "max_concurrent_verifications": 32,
+      "max_verifications_per_minute": 300,
+      "max_attempts_per_session": 5,
+      "retry_interval_milliseconds": 1000
     },
     "telegram_conf": {
       "client_id": ""
@@ -15,7 +19,9 @@
     },
     "state_conf": {
       "ttl_seconds": 600,
-      "verified_retention_seconds": 3600
+      "verified_retention_seconds": 3600,
+      "max_sessions": 10000,
+      "max_sessions_per_client": 1000
     },
     "trusted_client_keys": {}
   }

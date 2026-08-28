@@ -1,8 +1,3 @@
-// Package i18n holds the verification page message tables and resolves which
-// language a page is rendered in. The tables are the single source of truth
-// for both the server-rendered HTML and the client-side script: the resolved
-// table is embedded into the page config JSON so app.js never ships its own
-// copy.
 package i18n
 
 import (
@@ -132,6 +127,7 @@ var tables = map[string]map[string]string{
 		"status.complete":            "Verification complete.",
 		"outcome.success":            "Verification complete. Return to the bot and confirm.",
 		"error.turnstile_failed":     "The anti-bot check could not be completed.",
+		"error.turnstile_rate":       "Too many attempts. Wait a moment and try again.",
 		"error.turnstile_script":     "The anti-bot script could not be loaded.",
 		"error.telegram_unavailable": "Telegram login is not available in this browser. Please reopen the verification link in Telegram.",
 		"error.telegram_timeout":     "Telegram did not finish signing in. Please try again.",
@@ -187,6 +183,7 @@ var tables = map[string]map[string]string{
 		"status.complete":            "验证完成。",
 		"outcome.success":            "验证完成。请回到机器人处确认。",
 		"error.turnstile_failed":     "无法完成反机器人验证。",
+		"error.turnstile_rate":       "尝试过于频繁，请稍候再试。",
 		"error.turnstile_script":     "无法加载反机器人验证脚本。",
 		"error.telegram_unavailable": "当前浏览器无法使用 Telegram 登录。请在 Telegram 中重新打开验证链接。",
 		"error.telegram_timeout":     "Telegram 登录未能完成，请重试。",
