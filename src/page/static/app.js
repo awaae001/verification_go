@@ -43,7 +43,7 @@ const session = {
   startOffset: 0,
   turnstileWidgetID: null,
   turnstilePending: false,
-  worker: null,
+  workers: [],
   requestIDToken: null,
 };
 
@@ -125,17 +125,17 @@ function showOutcome(kind, text, retry) {
 }
 
 function terminate(code, fallback) {
-  stopWorker();
+  stopWorkers();
   hideStages();
   setStatus(msg("status.stopped"));
   showOutcome("error", msg(`terminal.${code}`) || fallback, null);
 }
 
-function stopWorker() {
-  if (session.worker) {
-    session.worker.terminate();
-    session.worker = null;
+function stopWorkers() {
+  for (const worker of session.workers) {
+    worker.terminate();
   }
+  session.workers = [];
 }
 
 function setProgress(percentage) {
@@ -304,37 +304,91 @@ function startProofOfWork(difficulty, maximumWork) {
   elements.powWidget.hidden = false;
   setProgress(0);
 
-  stopWorker();
-  // Resolved against this module, not the page URL, so the worker keeps the
-  // versioned asset prefix.
-  session.worker = new Worker(new URL("./pow-worker.js", import.meta.url));
-  session.worker.onmessage = (event) => {
-    const message = event.data;
-    if (message.type === "progress") {
-      setProgress(message.percentage);
+  stopWorkers();
+  const availableCores = Number.isInteger(navigator.hardwareConcurrency)
+    ? navigator.hardwareConcurrency
+    : 2;
+  // More workers have diminishing returns and can make high-core-count devices
+  // unresponsive, so use at most eight disjoint search slices.
+  const workerCount = Math.max(1, Math.min(availableCores, 8, maximumWork));
+  const completedByWorker = new Array(workerCount).fill(0);
+  const sliceSize = Math.floor(maximumWork / workerCount);
+  const extraSlices = maximumWork % workerCount;
+  const workerURL = new URL("./pow-worker.js", import.meta.url);
+  let exhaustedWorkers = 0;
+  let settled = false;
+
+  function fail(message, retry) {
+    if (settled) {
       return;
     }
-    if (message.type === "complete") {
-      stopWorker();
-      submitSolution(message.solution, difficulty, maximumWork);
+    settled = true;
+    stopWorkers();
+    setStatus(msg("status.failed"));
+    showOutcome("error", message, retry);
+  }
+
+  for (let index = 0; index < workerCount; index += 1) {
+    const sliceStart = index * sliceSize + Math.min(index, extraSlices);
+    const count = sliceSize + (index < extraSlices ? 1 : 0);
+    const distanceToEnd = maximumWork - session.startOffset;
+    const start = sliceStart >= distanceToEnd
+      ? sliceStart - distanceToEnd
+      : session.startOffset + sliceStart;
+
+    let worker;
+    try {
+      // Resolved against this module, not the page URL, so every worker keeps
+      // the versioned asset prefix.
+      worker = new Worker(workerURL);
+    } catch (error) {
+      console.debug("[page][pow] failed to create worker", error);
+      fail(msg("error.pow_worker"), null);
       return;
     }
-    stopWorker();
-    setStatus(msg("status.failed"));
-    showOutcome("error", msg("error.pow"), () => startProofOfWork(difficulty, maximumWork));
-  };
-  session.worker.onerror = (event) => {
-    console.debug("[page][pow] worker error", event.message);
-    stopWorker();
-    setStatus(msg("status.failed"));
-    showOutcome("error", msg("error.pow_worker"), null);
-  };
-  session.worker.postMessage({
-    challenge: session.challenge,
-    difficulty,
-    maximumWork,
-    startOffset: session.startOffset,
-  });
+    session.workers.push(worker);
+
+    worker.onmessage = (event) => {
+      if (settled) {
+        return;
+      }
+      const message = event.data;
+      if (message.type === "progress") {
+        completedByWorker[index] = Math.min(message.completed, count);
+        const completed = completedByWorker.reduce((sum, value) => sum + value, 0);
+        setProgress(Math.min(99.9, (completed / maximumWork) * 100));
+        return;
+      }
+      if (message.type === "complete") {
+        settled = true;
+        setProgress(100);
+        stopWorkers();
+        submitSolution(message.solution, difficulty, maximumWork);
+        return;
+      }
+      if (message.type === "exhausted") {
+        completedByWorker[index] = count;
+        exhaustedWorkers += 1;
+        if (exhaustedWorkers === workerCount) {
+          fail(msg("error.pow"), () => startProofOfWork(difficulty, maximumWork));
+        }
+        return;
+      }
+      console.debug("[page][pow] worker failed", message.message || message.type);
+      fail(msg("error.pow"), () => startProofOfWork(difficulty, maximumWork));
+    };
+    worker.onerror = (event) => {
+      console.debug("[page][pow] worker error", event.message);
+      fail(msg("error.pow_worker"), null);
+    };
+    worker.postMessage({
+      challenge: session.challenge,
+      difficulty,
+      maximumWork,
+      start,
+      count,
+    });
+  }
 }
 
 async function submitSolution(solution, difficulty, maximumWork) {
