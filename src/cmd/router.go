@@ -17,6 +17,9 @@ import (
 
 // newRouter builds the HTTP engine and registers the full route table.
 func newRouter(config *model.Config, stateStore *service.Store) *gin.Engine {
+	if !config.IsDev {
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
 	router.Use(
 		gin.Logger(),
