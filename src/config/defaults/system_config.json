@@ -1,0 +1,20 @@
+{
+  "system_conf": {
+    "turnstile_conf": {
+      "site_key": "",
+      "secret": "",
+      "action": ""
+    },
+    "telegram_conf": {
+      "client_id": ""
+    },
+    "pow_conf": {
+      "difficulty": 6,
+      "maximum_work": 268435456
+    },
+    "state_conf": {
+      "ttl_seconds": 600
+    },
+    "trusted_client_keys": {}
+  }
+}
