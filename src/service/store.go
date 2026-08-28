@@ -25,7 +25,6 @@ type turnstileStartResult uint8
 const (
 	turnstileStarted turnstileStartResult = iota
 	turnstileSessionInactive
-	turnstileStageConflict
 	turnstileAttemptInFlight
 	turnstileRetryTooSoon
 	turnstileAttemptsExhausted
@@ -134,9 +133,6 @@ func (s *Store) beginTurnstile(sessionID string, now time.Time, maxAttempts int,
 	if !exists || state.session.EffectiveStatus(now) != model.SessionStatusPending {
 		return turnstileSessionInactive
 	}
-	if state.stage != stageCreated {
-		return turnstileStageConflict
-	}
 	if state.turnstileInFlight {
 		return turnstileAttemptInFlight
 	}
@@ -174,7 +170,9 @@ func (s *Store) finishTurnstileAttempt(sessionID string) {
 	s.sessions[sessionID] = state
 }
 
-// PassTurnstile atomically records anti-bot proof and returns the credentials and session expiration for the Telegram stage.
+// PassTurnstile atomically starts a fresh verification attempt and returns its
+// credentials and session expiration. A successful new anti-bot proof replaces
+// any unfinished attempt without resetting the session-wide attempt limit.
 func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Time) (string, string, time.Time, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -182,17 +180,15 @@ func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Ti
 	if !exists || state.session.EffectiveStatus(now) != model.SessionStatusPending {
 		return "", "", time.Time{}, false
 	}
-	switch state.stage {
-	case stageCreated:
-		state.stage = stageAntiBotPassed
-		state.antiBotToken = antiBotToken
-		state.nonce = nonce
-		state.turnstileInFlight = false
-		s.sessions[sessionID] = state
-		return antiBotToken, nonce, state.session.ExpiresAt, true
-	default:
-		return "", "", time.Time{}, false
-	}
+	state.stage = stageAntiBotPassed
+	state.antiBotToken = antiBotToken
+	state.nonce = nonce
+	state.powToken = ""
+	state.challenge = ""
+	state.user = model.TelegramUser{}
+	state.turnstileInFlight = false
+	s.sessions[sessionID] = state
+	return antiBotToken, nonce, state.session.ExpiresAt, true
 }
 
 // CheckAntiBot validates the reusable anti-bot token for the current session stage.

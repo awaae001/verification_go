@@ -86,14 +86,11 @@ func (h *TurnstileHandler) Verify(c *gin.Context) {
 	case turnstileSessionInactive:
 		utils.AbortWithError(c, utils.NewError(utils.CodeSessionExpired, "session is missing or expired"))
 		return
-	case turnstileStageConflict:
-		utils.AbortWithError(c, utils.NewError(utils.CodeStateConflict, "anti-bot stage has already been completed for this session"))
-		return
 	case turnstileAttemptInFlight, turnstileRetryTooSoon:
 		utils.AbortWithError(c, utils.NewError(utils.CodeRateLimited, "turnstile verification rate limit reached"))
 		return
 	case turnstileAttemptsExhausted:
-		utils.AbortWithError(c, utils.NewError(utils.CodeStateConflict, "turnstile verification attempt limit reached"))
+		utils.AbortWithError(c, utils.NewError(utils.CodeTurnstileAttemptsExhausted, "turnstile verification attempt limit reached"))
 		return
 	}
 	defer h.store.finishTurnstileAttempt(sessionID)

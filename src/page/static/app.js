@@ -52,11 +52,15 @@ const session = {
 const TERMINAL_CODES = new Set([
   "SESSION_NOT_FOUND",
   "SESSION_EXPIRED",
-  "ANTIBOT_REQUIRED",
-  "STATE_CONFLICT",
+  "TURNSTILE_ATTEMPTS_EXHAUSTED",
   "TURNSTILE_UNAVAILABLE",
   "TELEGRAM_KEY_UNAVAILABLE",
   "INTERNAL_ERROR",
+]);
+
+const RESTARTABLE_CODES = new Set([
+  "ANTIBOT_REQUIRED",
+  "STATE_CONFLICT",
 ]);
 
 class ApiError extends Error {
@@ -149,6 +153,13 @@ function handleFailure(error, retry) {
   if (!(error instanceof ApiError)) {
     showOutcome("error", error.message || msg("status.failed"), retry);
     setStatus(msg("status.failed"));
+    return;
+  }
+  if (RESTARTABLE_CODES.has(error.code)) {
+    stopWorkers();
+    hideStages();
+    setStatus(msg("status.failed"));
+    showOutcome("error", msg("error.session_restart") || error.message, () => window.location.reload());
     return;
   }
   if (retry && (error.code === "NETWORK_ERROR" || !TERMINAL_CODES.has(error.code))) {

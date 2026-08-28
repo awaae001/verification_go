@@ -10,19 +10,20 @@ import (
 type ErrorCode string
 
 const (
-	CodeInvalidRequest         ErrorCode = "INVALID_REQUEST"
-	CodeUnauthorizedClient     ErrorCode = "UNAUTHORIZED_CLIENT"
-	CodeSessionNotFound        ErrorCode = "SESSION_NOT_FOUND"
-	CodeSessionExpired         ErrorCode = "SESSION_EXPIRED"
-	CodeTurnstileFailed        ErrorCode = "TURNSTILE_FAILED"
-	CodeTurnstileUnavailable   ErrorCode = "TURNSTILE_UNAVAILABLE"
-	CodeAntiBotRequired        ErrorCode = "ANTIBOT_REQUIRED"
-	CodeTelegramTokenInvalid   ErrorCode = "TELEGRAM_TOKEN_INVALID"
-	CodeTelegramKeyUnavailable ErrorCode = "TELEGRAM_KEY_UNAVAILABLE"
-	CodeStateConflict          ErrorCode = "STATE_CONFLICT"
-	CodeRateLimited            ErrorCode = "RATE_LIMITED"
-	CodePoWSolutionInvalid     ErrorCode = "POW_SOLUTION_INVALID"
-	CodeInternal               ErrorCode = "INTERNAL_ERROR"
+	CodeInvalidRequest             ErrorCode = "INVALID_REQUEST"
+	CodeUnauthorizedClient         ErrorCode = "UNAUTHORIZED_CLIENT"
+	CodeSessionNotFound            ErrorCode = "SESSION_NOT_FOUND"
+	CodeSessionExpired             ErrorCode = "SESSION_EXPIRED"
+	CodeTurnstileFailed            ErrorCode = "TURNSTILE_FAILED"
+	CodeTurnstileUnavailable       ErrorCode = "TURNSTILE_UNAVAILABLE"
+	CodeTurnstileAttemptsExhausted ErrorCode = "TURNSTILE_ATTEMPTS_EXHAUSTED"
+	CodeAntiBotRequired            ErrorCode = "ANTIBOT_REQUIRED"
+	CodeTelegramTokenInvalid       ErrorCode = "TELEGRAM_TOKEN_INVALID"
+	CodeTelegramKeyUnavailable     ErrorCode = "TELEGRAM_KEY_UNAVAILABLE"
+	CodeStateConflict              ErrorCode = "STATE_CONFLICT"
+	CodeRateLimited                ErrorCode = "RATE_LIMITED"
+	CodePoWSolutionInvalid         ErrorCode = "POW_SOLUTION_INVALID"
+	CodeInternal                   ErrorCode = "INTERNAL_ERROR"
 )
 
 type ErrorInfo struct {
@@ -97,7 +98,7 @@ func statusForCode(code ErrorCode) int {
 		return http.StatusNotFound
 	case CodeTurnstileFailed:
 		return http.StatusForbidden
-	case CodeStateConflict:
+	case CodeStateConflict, CodeTurnstileAttemptsExhausted:
 		return http.StatusConflict
 	case CodeRateLimited:
 		return http.StatusTooManyRequests
