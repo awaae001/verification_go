@@ -82,7 +82,7 @@ func (h *TurnstileHandler) Verify(c *gin.Context) {
 		return
 	}
 	if !h.store.PassTurnstile(sessionID, antiBotToken, nonce, now) {
-		utils.AbortWithError(c, utils.NewError(utils.CodeStateConflict, "session cannot enter anti-bot-passed state"))
+		utils.AbortWithError(c, utils.NewError(utils.CodeStateConflict, "anti-bot stage has already been completed for this session"))
 		return
 	}
 	c.JSON(http.StatusOK, dto.VerifyTurnstileResponse{
