@@ -39,6 +39,14 @@
     <h2 class="stage-title" id="stage-telegram-title">{{t .Lang "stage.telegram.title"}}</h2>
     <p class="stage-hint">{{t .Lang "stage.telegram.hint"}}</p>
     <p class="stage-notice">{{t .Lang "stage.telegram.notice"}}</p>
+    <nav class="stage-docs" aria-label="{{t .Lang "stage.telegram.docs.aria"}}">
+      <span>{{t .Lang "stage.telegram.docs.prefix"}}</span>
+      <a href="https://core.telegram.org/bots/telegram-login#available-scopes"
+         target="_blank" rel="noopener noreferrer">{{t .Lang "stage.telegram.docs.login"}}</a>
+      <span aria-hidden="true">·</span>
+      <a href="https://core.telegram.org/bots/faq#what-messages-will-my-bot-get"
+         target="_blank" rel="noopener noreferrer">{{t .Lang "stage.telegram.docs.bot"}}</a>
+    </nav>
     <div class="widget" id="telegram-widget">
       <button type="button" class="button-telegram" id="telegram-button">
         {{t .Lang "stage.telegram.button"}}
