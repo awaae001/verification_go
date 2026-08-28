@@ -1,4 +1,4 @@
-import { prepareTelegramLogin } from "./telegram.js";
+import { prepareTelegramLogin, TelegramLoginError } from "./telegram.js";
 import { computeStartOffset, UnsupportedBrowserError } from "./fingerprint.js";
 
 const config = JSON.parse(document.getElementById("page-config").textContent);
@@ -42,6 +42,7 @@ const session = {
   challenge: "",
   startOffset: 0,
   turnstileWidgetID: null,
+  turnstilePending: false,
   worker: null,
   requestIDToken: null,
 };
@@ -188,6 +189,7 @@ function startTurnstile() {
 }
 
 function resetTurnstile() {
+  session.turnstilePending = false;
   elements.outcome.hidden = true;
   showStage("turnstile");
   setStatus(msg("status.turnstile_waiting"));
@@ -197,16 +199,33 @@ function resetTurnstile() {
 }
 
 async function submitTurnstile(token) {
+  if (session.turnstilePending || session.antiBotToken) {
+    return;
+  }
+  session.turnstilePending = true;
   setStatus(msg("status.checking"));
   try {
     const result = await post("/antibot", { token });
     session.antiBotToken = result.antibot_token;
     session.nonce = result.nonce;
   } catch (error) {
+    session.turnstilePending = false;
     handleFailure(error, error.code === "TURNSTILE_FAILED" ? resetTurnstile : null);
     return;
   }
+  if (session.turnstileWidgetID !== null && window.turnstile && typeof window.turnstile.remove === "function") {
+    window.turnstile.remove(session.turnstileWidgetID);
+    session.turnstileWidgetID = null;
+  }
   await startTelegram();
+}
+
+function localizeTelegramError(error) {
+  if (!(error instanceof TelegramLoginError)) {
+    return error;
+  }
+  const message = msg(`error.telegram_${error.reason}`);
+  return message ? new Error(message) : error;
 }
 
 async function startTelegram() {
@@ -214,7 +233,7 @@ async function startTelegram() {
   try {
     session.requestIDToken = await prepareTelegramLogin(config.telegram_client_id, session.nonce);
   } catch (error) {
-    handleFailure(error, null);
+    handleFailure(localizeTelegramError(error), null);
     return;
   }
   elements.outcome.hidden = true;
@@ -237,7 +256,7 @@ async function submitTelegram() {
           setStatus(msg("status.telegram_ready"));
         }
       : null;
-    handleFailure(error, retry);
+    handleFailure(localizeTelegramError(error), retry);
     return;
   }
   await startConfirmation();

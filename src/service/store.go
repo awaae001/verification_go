@@ -82,24 +82,28 @@ func (s *Store) IsSessionActive(id string, now time.Time) bool {
 	return exists && state.session.EffectiveStatus(now) == model.SessionStatusPending
 }
 
-// PassTurnstile atomically records anti-bot proof and issues the Telegram nonce.
-// The transition is single-shot: a session that already left stageCreated keeps
-// the credentials it handed out, so a second Turnstile proof cannot reset it.
-func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Time) bool {
+// PassTurnstile atomically records anti-bot proof and returns the credentials
+// for the Telegram stage. Repeated proofs at the same stage return the original
+// credentials instead of resetting the session.
+func (s *Store) PassTurnstile(sessionID, antiBotToken, nonce string, now time.Time) (string, string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	state, exists := s.sessions[sessionID]
 	if !exists || state.session.EffectiveStatus(now) != model.SessionStatusPending {
-		return false
+		return "", "", false
 	}
-	if state.stage != stageCreated {
-		return false
+	switch state.stage {
+	case stageAntiBotPassed:
+		return state.antiBotToken, state.nonce, true
+	case stageCreated:
+		state.stage = stageAntiBotPassed
+		state.antiBotToken = antiBotToken
+		state.nonce = nonce
+		s.sessions[sessionID] = state
+		return antiBotToken, nonce, true
+	default:
+		return "", "", false
 	}
-	state.stage = stageAntiBotPassed
-	state.antiBotToken = antiBotToken
-	state.nonce = nonce
-	s.sessions[sessionID] = state
-	return true
 }
 
 // CheckAntiBot validates the reusable anti-bot token for the current session stage.

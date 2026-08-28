@@ -81,7 +81,8 @@ func (h *TurnstileHandler) Verify(c *gin.Context) {
 		utils.AbortWithError(c, utils.WrapError(utils.CodeInternal, "failed to create Telegram nonce", err))
 		return
 	}
-	if !h.store.PassTurnstile(sessionID, antiBotToken, nonce, now) {
+	antiBotToken, nonce, ok := h.store.PassTurnstile(sessionID, antiBotToken, nonce, now)
+	if !ok {
 		utils.AbortWithError(c, utils.NewError(utils.CodeStateConflict, "anti-bot stage has already been completed for this session"))
 		return
 	}

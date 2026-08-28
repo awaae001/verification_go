@@ -7,6 +7,16 @@
 // and XMLHttpRequest are wrapped before the SDK is loaded.
 
 const SDK_URL = "https://oauth.telegram.org/js/telegram-login.js?5";
+const IN_APP_READY_TIMEOUT = 5000;
+const LOGIN_TIMEOUT = 60000;
+
+export class TelegramLoginError extends Error {
+  constructor(reason, message) {
+    super(message);
+    this.name = "TelegramLoginError";
+    this.reason = reason;
+  }
+}
 
 function patchedURL(rawURL, nonce) {
   if (!window.TelegramWebviewProxy) {
@@ -68,12 +78,83 @@ function loadSDK() {
   });
 }
 
+function waitForInAppSupport() {
+  if (!window.TelegramWebviewProxy) {
+    return Promise.resolve();
+  }
+
+  const telegram = window.Telegram;
+  const receivers = telegram && [telegram.WebView, telegram.TelegramGameProxy]
+    .filter((receiver) => receiver && typeof receiver.receiveEvent === "function");
+  if (!receivers || receivers.length === 0) {
+    return Promise.reject(new TelegramLoginError(
+      "unavailable",
+      "Telegram login did not initialize in this browser",
+    ));
+  }
+
+  return new Promise((resolve, reject) => {
+    const restorers = [];
+    let settled = false;
+    let timer = null;
+    const finish = (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      clearTimeout(timer);
+      for (const restore of restorers) {
+        restore();
+      }
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    };
+
+    for (const receiver of receivers) {
+      const original = receiver.receiveEvent;
+      const wrapped = function (eventType, eventData) {
+        const result = original.call(this, eventType, eventData);
+        if (eventType === "oauth_supported") {
+          finish(null);
+        }
+        return result;
+      };
+      receiver.receiveEvent = wrapped;
+      restorers.push(() => {
+        if (receiver.receiveEvent === wrapped) {
+          receiver.receiveEvent = original;
+        }
+      });
+    }
+
+    timer = setTimeout(() => {
+      finish(new TelegramLoginError(
+        "unavailable",
+        "Telegram login is not available in this browser",
+      ));
+    }, IN_APP_READY_TIMEOUT);
+
+    try {
+      window.TelegramWebviewProxy.postEvent("oauth_request", "{}");
+    } catch (error) {
+      finish(new TelegramLoginError(
+        "unavailable",
+        error && error.message ? error.message : "Telegram login is not available",
+      ));
+    }
+  });
+}
+
 // prepareTelegramLogin installs the in-app nonce patch, loads the SDK, and
 // returns a function that opens the Telegram login flow and resolves with an
 // ID token.
 export async function prepareTelegramLogin(clientID, nonce) {
   installInAppNoncePatch(nonce);
   await loadSDK();
+  await waitForInAppSupport();
 
   const login = window.Telegram && window.Telegram.Login;
   if (!login || typeof login.auth !== "function") {
@@ -82,24 +163,54 @@ export async function prepareTelegramLogin(clientID, nonce) {
 
   return function requestIDToken() {
     return new Promise((resolve, reject) => {
-      login.auth(
-        {
-          client_id: clientID,
-          scope: "profile write",
-          lang: "en",
-          nonce,
-        },
-        (result) => {
-          const idToken = result && (result.id_token || result.idToken);
-          if (!idToken) {
-            // Full SDK payloads are debug-only: they may carry account details.
-            console.debug("[page][telegram] login did not return an ID token", result);
-            reject(new Error("Telegram login was cancelled or returned no token"));
-            return;
-          }
+      let settled = false;
+      const finish = (error, idToken) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        clearTimeout(timer);
+        if (error) {
+          reject(error);
+        } else {
           resolve(idToken);
-        },
-      );
+        }
+      };
+      const timer = setTimeout(() => {
+        finish(new TelegramLoginError(
+          "timeout",
+          "Telegram login timed out",
+        ));
+      }, LOGIN_TIMEOUT);
+
+      try {
+        login.auth(
+          {
+            client_id: clientID,
+            scope: "profile write",
+            lang: "en",
+            nonce,
+          },
+          (result) => {
+            const idToken = result && (result.id_token || result.idToken);
+            if (!idToken) {
+              // Full SDK payloads are debug-only: they may carry account details.
+              console.debug("[page][telegram] login did not return an ID token", result);
+              finish(new TelegramLoginError(
+                "cancelled",
+                "Telegram login was cancelled or returned no token",
+              ));
+              return;
+            }
+            finish(null, idToken);
+          },
+        );
+      } catch (error) {
+        finish(new TelegramLoginError(
+          "unavailable",
+          error && error.message ? error.message : "Telegram login is not available",
+        ));
+      }
     });
   };
 }
