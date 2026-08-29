@@ -49,6 +49,18 @@ body {
   color: var(--text);
 }
 
+.site-footer a.github-link {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.site-footer a.github-link svg {
+  display: inline-block;
+  vertical-align: -0.125em;
+}
+
 @media (max-width: 40rem) {
   .site-footer {
     position: static;

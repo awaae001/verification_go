@@ -83,7 +83,7 @@ func Messages(lang string) map[string]string {
 var tables = map[string]map[string]string{
 	English: {
 		"title":             "Human Verification",
-		"subtitle.active":   "Follow the on-screen prompts. This takes less than a minute.",
+		"subtitle.active":   "To verify you're a real visitor, we need a quick security check. Please complete the verification below.",
 		"subtitle.done":     "This verification is already complete.",
 		"subtitle.expired":  "This verification link has expired.",
 		"subtitle.notfound": "This verification link is not valid.",
@@ -146,7 +146,7 @@ var tables = map[string]map[string]string{
 	},
 	Chinese: {
 		"title":             "人机验证",
-		"subtitle.active":   "按照页面提示操作即可，全程不到一分钟。",
+		"subtitle.active":   "为了验证您是真实访客，我们需要进行一次简短的安全检查，请完成验证。",
 		"subtitle.done":     "此验证已完成。",
 		"subtitle.expired":  "此验证链接已过期。",
 		"subtitle.notfound": "此验证链接无效。",
