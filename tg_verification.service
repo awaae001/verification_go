@@ -1,0 +1,15 @@
+[Unit]
+Description=TG Verification Service
+After=network.target
+
+[Service]
+Type=simple
+User=root	
+Group=root
+WorkingDirectory=/data/tg_verification_go
+ExecStart=/data/tg_verification_go/tg_verification_go
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
