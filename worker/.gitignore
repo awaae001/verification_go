@@ -7,7 +7,7 @@ pnpm-lock.yaml
 # Wrangler
 .wrangler/
 .dev.vars
-wrangler.toml.local
+wrangler.local.toml
 
 # TypeScript
 *.tsbuildinfo

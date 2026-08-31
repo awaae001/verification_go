@@ -5,7 +5,7 @@
  * 用于生成 TRUSTED_CLIENT_KEYS
  */
 
-const crypto = require('crypto')
+import crypto from 'node:crypto'
 
 function generateKey() {
   return crypto.randomBytes(32).toString('base64')

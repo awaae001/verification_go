@@ -4,7 +4,7 @@
 
 export interface Env {
   // Durable Objects
-  SESSIONS: DurableObjectNamespace<import('../durable-objects/session-store').SessionStore>
+  SESSIONS: DurableObjectNamespace
 
   // Environment Variables
   TELEGRAM_CLIENT_ID: string
@@ -24,8 +24,12 @@ export interface Env {
 
   // Secrets
   TURNSTILE_SECRET: string
-  API_KEY: string
   TRUSTED_CLIENT_KEYS: string
+}
+
+// Hono Context Variables
+export interface Variables {
+  client: string
 }
 
 export interface Config {

@@ -5,10 +5,10 @@
 
 import type { Context } from 'hono'
 import { html } from 'hono/html'
-import type { Env, Config } from '../types/env'
+import type { Env, Config, Variables } from '../types/env'
 
 export function renderVerifyPage(
-  c: Context<{ Bindings: Env }>,
+  c: Context<{ Bindings: Env; Variables: Variables }>,
   sessionId: string,
   config: Config
 ) {
@@ -263,7 +263,7 @@ export function renderVerifyPage(
 
           // Step 1: Turnstile Success
           function onTurnstileSuccess(token) {
-            fetch(\`\${BASE_URL}/api/sessions/\${SESSION_ID}/verify-turnstile\`, {
+            fetch(\`\${BASE_URL}/api/sessions/\${SESSION_ID}/antibot\`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ token }),
@@ -303,7 +303,7 @@ export function renderVerifyPage(
             
             if (idToken && nonce) {
               // 验证 Telegram token
-              fetch(\`\${BASE_URL}/api/sessions/\${SESSION_ID}/verify-telegram\`, {
+              fetch(\`\${BASE_URL}/api/sessions/\${SESSION_ID}/telegram\`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ nonce, id_token: idToken }),
@@ -344,7 +344,7 @@ export function renderVerifyPage(
 
               // 提交解决方案
               const verifyRes = await fetch(
-                \`\${BASE_URL}/api/sessions/\${SESSION_ID}/verify-pow\`,
+                \`\${BASE_URL}/api/sessions/\${SESSION_ID}/pow\`,
                 {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },

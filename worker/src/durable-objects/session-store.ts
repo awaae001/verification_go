@@ -96,7 +96,8 @@ export class SessionStore implements DurableObject {
 
     const existing = await this.state.storage.get<SessionState>('session')
     if (existing) {
-      throw new AppError('SESSION_EXISTS', 'session already exists', 409)
+      // 对齐 Go：ErrSessionExists 属内部重试信号，正常不外露
+      throw new AppError('STATE_CONFLICT', 'session already exists', 409)
     }
 
     const now = Date.now()
@@ -382,7 +383,11 @@ export class SessionStore implements DurableObject {
     }
 
     if (!state.nonce || !constantTimeEqual(state.nonce, body.nonce)) {
-      throw new AppError('INVALID_NONCE', 'invalid nonce', 401)
+      throw new AppError(
+        'STATE_CONFLICT',
+        'nonce is missing, expired, or already consumed',
+        409
+      )
     }
 
     // 原子性状态转换
@@ -424,7 +429,11 @@ export class SessionStore implements DurableObject {
     }
 
     if (!state.powToken || !constantTimeEqual(state.powToken, body.powToken)) {
-      throw new AppError('INVALID_POW_TOKEN', 'invalid PoW token', 401)
+      throw new AppError(
+        'STATE_CONFLICT',
+        'PoW token is missing, expired, or already consumed',
+        409
+      )
     }
 
     // 原子性状态转换
@@ -489,7 +498,11 @@ export class SessionStore implements DurableObject {
     }
 
     if (!state.challenge || !constantTimeEqual(state.challenge, body.challenge)) {
-      throw new AppError('INVALID_CHALLENGE', 'invalid challenge', 401)
+      throw new AppError(
+        'STATE_CONFLICT',
+        'challenge is missing, expired, or already consumed',
+        409
+      )
     }
 
     // 原子性状态转换 - 标记为已验证

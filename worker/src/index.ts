@@ -3,9 +3,9 @@
  */
 
 import { Hono } from 'hono'
-import type { Env } from './types/env'
+import type { Env, Variables } from './types/env'
 import { parseConfig } from './types/env'
-import { clientAuth, cors, errorHandler, logger } from './middleware'
+import { clientAuth, cors, errorHandler, logger, antibotProtect } from './middleware'
 import {
   createSession,
   getSessionStatus,
@@ -20,51 +20,55 @@ import { renderVerifyPage } from './views/verify'
 export { SessionStore } from './durable-objects/session-store'
 
 // 创建 Hono 应用
-const app = new Hono<{ Bindings: Env }>()
+const app = new Hono<{ Bindings: Env; Variables: Variables }>()
 
 // 全局中间件
 app.use('*', errorHandler())
 app.use('*', cors())
 app.use('*', logger())
 
-// API 路由 - 需要客户端认证
-app.use('/api/*', async (c, next) => {
+// 验证页面 - 公开访问（对应 Go 的 /v/:sid）
+app.get('/v/:id', async (c) => {
   const config = parseConfig(c.env)
-  return clientAuth(config)(c, next)
+  const sessionId = c.req.param('id')
+  return renderVerifyPage(c, sessionId, config)
 })
 
+// API 路由 - 会话创建与状态查询需要客户端认证
 app.post('/api/sessions', async (c) => {
   const config = parseConfig(c.env)
+  await clientAuth(config)(c, async () => {})
   return createSession(c, config)
 })
 
-app.get('/api/sessions/:id', getSessionStatus)
+app.get('/api/sessions/:sid/status', async (c) => {
+  const config = parseConfig(c.env)
+  await clientAuth(config)(c, async () => {})
+  return getSessionStatus(c)
+})
 
-app.post('/api/sessions/:id/verify-turnstile', async (c) => {
+// 浏览器验证端点 - antibot 无需鉴权，后续步骤需要 antibot token
+app.post('/api/sessions/:sid/antibot', async (c) => {
   const config = parseConfig(c.env)
   return verifyTurnstile(c, config)
 })
 
-app.post('/api/sessions/:id/verify-telegram', async (c) => {
+app.post('/api/sessions/:sid/telegram', async (c) => {
   const config = parseConfig(c.env)
+  await antibotProtect()(c, async () => {})
   return verifyTelegramToken(c, config)
 })
 
-app.post('/api/sessions/:id/challenge', async (c) => {
+app.post('/api/sessions/:sid/challenge', async (c) => {
   const config = parseConfig(c.env)
+  await antibotProtect()(c, async () => {})
   return createChallenge(c, config)
 })
 
-app.post('/api/sessions/:id/verify-pow', async (c) => {
+app.post('/api/sessions/:sid/pow', async (c) => {
   const config = parseConfig(c.env)
+  await antibotProtect()(c, async () => {})
   return verifyPoWHandler(c, config)
-})
-
-// 验证页面 - 无需认证
-app.get('/verify/:id', async (c) => {
-  const config = parseConfig(c.env)
-  const sessionId = c.req.param('id')
-  return renderVerifyPage(c, sessionId, config)
 })
 
 // 健康检查
