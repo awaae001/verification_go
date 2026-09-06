@@ -18,6 +18,7 @@ import { renderVerifyPage } from './views/verify'
 
 // 导出 Durable Object
 export { SessionStore } from './durable-objects/session-store'
+export { RateLimiter } from './durable-objects/rate-limiter'
 
 // 创建 Hono 应用
 const app = new Hono<{ Bindings: Env; Variables: Variables }>()

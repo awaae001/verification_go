@@ -38,10 +38,18 @@ TRUSTED_CLIENT_KEYS = ""
 name = "SESSIONS"
 class_name = "SessionStore"
 
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
 # Durable Objects 迁移
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["SessionStore"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RateLimiter"]
 
 # ─────────────────────────────────────────────────────────────
 # 命名环境配置

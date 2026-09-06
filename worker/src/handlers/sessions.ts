@@ -32,6 +32,15 @@ function getSessionStub(c: Context<{ Bindings: Env; Variables: Variables }>, ses
 }
 
 /**
+ * 获取全局限速器 Durable Object stub（单例，固定 ID）
+ */
+function getRateLimiterStub(c: Context<{ Bindings: Env; Variables: Variables }>) {
+  // 使用固定 ID 保证全局唯一实例
+  const id = c.env.RATE_LIMITER.idFromName('global')
+  return c.env.RATE_LIMITER.get(id)
+}
+
+/**
  * POST /api/sessions - 创建新会话
  */
 export async function createSession(
@@ -40,30 +49,79 @@ export async function createSession(
 ): Promise<Response> {
   const client = c.get('client')
 
-  // 生成会话 ID
-  const sessionId = generateSecureToken()
+  // 对齐 Go store.go:90-106: 会话容量限制检查
+  const limiterStub = getRateLimiterStub(c)
+  const quotaResp = await limiterStub.fetch('http://internal/acquire-session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client,
+      maxTotal: config.session.maxTotal,
+      maxPerClient: config.session.maxPerClient,
+    }),
+  })
+
+  if (!quotaResp.ok) {
+    throw new AppError('INTERNAL_ERROR', 'rate limiter unavailable', 500)
+  }
+
+  const quota = await quotaResp.json<{ ok: boolean; error?: string }>()
+  if (!quota.ok) {
+    if (quota.error === 'session_capacity') {
+      throw new AppError(
+        'SESSION_CAPACITY_EXCEEDED',
+        'global session capacity exceeded',
+        503
+      )
+    }
+    if (quota.error === 'client_session_capacity') {
+      throw new AppError(
+        'CLIENT_SESSION_CAPACITY_EXCEEDED',
+        'client session capacity exceeded',
+        429
+      )
+    }
+    throw new AppError('INTERNAL_ERROR', 'rate limiter error', 500)
+  }
 
   // 计算过期时间（对齐 Go: Unix 秒，handler/session.go:57）
   const now = Date.now()
   const expiresAt = Math.floor(now / 1000) + config.session.ttlSeconds
 
-  // 获取会话的 Durable Object
-  const stub = getSessionStub(c, sessionId)
+  // 对齐 Go session.go:48-53: 会话 ID 冲突时重试（最多 3 次）
+  let sessionId: string = ''
+  let response: Response | null = null
 
-  // 创建会话（DO 内部存储时会转为毫秒）
-  const response = await stub.fetch('http://internal/create', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      sessionId,
-      client,
-      expiresAt: expiresAt * 1000, // DO 内部用毫秒存储
-    }),
-  })
+  for (let attempt = 0; attempt < 3; attempt++) {
+    sessionId = generateSecureToken()
+    const attemptStub = getSessionStub(c, sessionId)
+    response = await attemptStub.fetch('http://internal/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId,
+        client,
+        expiresAt: expiresAt * 1000,
+      }),
+    })
 
-  if (!response.ok) {
-    const error = (await response.json()) as any
-    throw new AppError(error.code, error.info.message, response.status)
+    // 成功或非冲突错误都直接跳出
+    if (response.ok || response.status !== 409) break
+  }
+
+  if (!response || !response.ok) {
+    // 创建失败，释放已获取的会话配额
+    await limiterStub.fetch('http://internal/release-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client }),
+    })
+
+    if (response) {
+      const error = (await response.json()) as any
+      throw new AppError(error.code, error.info.message, response.status)
+    }
+    throw new AppError('INTERNAL_ERROR', 'failed to create session', 500)
   }
 
   // 生成验证 URL（对齐 Go 的 /v/:id 路径）
@@ -105,8 +163,12 @@ export async function getSessionStatus(
   const result: SessionStatusResponse = {
     session_id: session.id,
     status: session.status,
-    user_id: session.user?.id,
-    user_name: session.user?.name,
+  }
+
+  // 对齐 Go status.go:22-26: 仅 verified 状态才填充 user 字段
+  if (session.status === 'verified' && session.user) {
+    result.user_id = session.user.id
+    result.user_name = session.user.name
   }
 
   return c.json(result)
@@ -120,13 +182,46 @@ export async function verifyTurnstile(
   config: Config
 ): Promise<Response> {
   const sessionId = c.req.param('sid')!
-  const body = await c.req.json<VerifyTurnstileRequest>()
+  // 对齐 Go turnstile.go:23,98: 限制请求体 4KB
+  const rawBody = await c.req.raw.text()
+  if (rawBody.length > 4096) {
+    throw new AppError('INVALID_REQUEST', 'request body too large', 400)
+  }
+  const body: VerifyTurnstileRequest = JSON.parse(rawBody)
 
   if (!body.token) {
     throw new AppError('INVALID_REQUEST', 'missing turnstile token', 400)
   }
 
   const stub = getSessionStub(c, sessionId)
+
+  // 对齐 Go turnstile.go:104-117: 全局并发 + 令牌桶速率限制
+  const limiterStub = getRateLimiterStub(c)
+  const turnstileQuotaResp = await limiterStub.fetch('http://internal/acquire-turnstile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      maxConcurrent: config.turnstile.maxConcurrent,
+      maxPerMinute: config.turnstile.maxPerMinute,
+      sessionId,
+    }),
+  })
+
+  if (!turnstileQuotaResp.ok) {
+    throw new AppError('INTERNAL_ERROR', 'rate limiter unavailable', 500)
+  }
+
+  const turnstileQuota = await turnstileQuotaResp.json<{ ok: boolean; error?: string }>()
+  if (!turnstileQuota.ok) {
+    // capacity = 并发已满, rate_limited = 令牌桶空
+    throw new AppError(
+      'RATE_LIMITED',
+      turnstileQuota.error === 'capacity'
+        ? 'turnstile verification at capacity, try again later'
+        : 'turnstile verification rate limit reached',
+      429
+    )
+  }
 
   // 1. 原子性检查 - 开始 Turnstile 验证
   const beginResp = await stub.fetch('http://internal/begin-turnstile', {
@@ -140,21 +235,29 @@ export async function verifyTurnstile(
 
   const beginResult = await beginResp.json<{ result: string }>()
 
+  // 对齐 Go turnstile.go:85-95 的错误码映射
+  // 注意：这些 throw 在 try 块之外，需要手动释放限速 slot
+  let beginError: AppError | null = null
   if (beginResult.result === 'session_inactive') {
-    throw new AppError('SESSION_NOT_FOUND', 'session not found or expired', 404)
-  }
-  if (beginResult.result === 'attempt_in_flight') {
-    throw new AppError('STATE_CONFLICT', 'turnstile verification in progress', 409)
-  }
-  if (beginResult.result === 'attempts_exhausted') {
-    throw new AppError(
+    beginError = new AppError('SESSION_EXPIRED', 'session is missing or expired', 404)
+  } else if (beginResult.result === 'attempt_in_flight' || beginResult.result === 'retry_too_soon') {
+    beginError = new AppError('RATE_LIMITED', 'turnstile verification rate limit reached', 429)
+  } else if (beginResult.result === 'attempts_exhausted') {
+    beginError = new AppError(
       'TURNSTILE_ATTEMPTS_EXHAUSTED',
-      'turnstile attempts exhausted',
+      'turnstile verification attempt limit reached',
       409
     )
   }
-  if (beginResult.result === 'retry_too_soon') {
-    throw new AppError('RATE_LIMITED', 'turnstile retry too soon', 429)
+
+  if (beginError) {
+    // 释放限速 slot 后再抛出
+    await limiterStub.fetch('http://internal/release-turnstile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    })
+    throw beginError
   }
 
   try {
@@ -206,6 +309,13 @@ export async function verifyTurnstile(
   } finally {
     // 6. 无论成功失败，都要清除 in-flight 标志
     await stub.fetch('http://internal/finish-turnstile', { method: 'POST' })
+
+    // 释放 Turnstile 全局并发 slot
+    await limiterStub.fetch('http://internal/release-turnstile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    })
   }
 }
 

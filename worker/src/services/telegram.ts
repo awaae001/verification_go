@@ -48,6 +48,22 @@ export class TelegramVerifier {
       throw new AppError('TELEGRAM_TOKEN_INVALID', 'token subject is missing', 401)
     }
 
+    // 对齐 Go verifier.go:109-117: 显式校验 iat/exp 时间范围
+    // jose 的 jwtVerify 默认校验 exp，但不校验 iat（未来签发攻击防护）
+    const now = Math.floor(Date.now() / 1000)
+    const iat = typeof claims.iat === 'number' ? claims.iat : 0
+    const exp = typeof claims.exp === 'number' ? claims.exp : 0
+
+    if (iat >= exp) {
+      throw new AppError('TELEGRAM_TOKEN_INVALID', 'invalid token time range', 401)
+    }
+    if (iat > now) {
+      throw new AppError('TELEGRAM_TOKEN_INVALID', 'token was issued in the future', 401)
+    }
+    if (exp <= now) {
+      throw new AppError('TELEGRAM_TOKEN_INVALID', 'token is expired', 401)
+    }
+
     if (!claims.nonce) {
       throw new AppError('TELEGRAM_TOKEN_INVALID', 'token nonce is missing', 401)
     }

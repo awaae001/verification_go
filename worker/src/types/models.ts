@@ -127,6 +127,8 @@ export type ErrorCode =
   | 'RATE_LIMITED'
   | 'POW_SOLUTION_INVALID'
   | 'INTERNAL_ERROR'
+  | 'SESSION_CAPACITY_EXCEEDED'
+  | 'CLIENT_SESSION_CAPACITY_EXCEEDED'
 
 export interface ErrorResponse {
   code: ErrorCode

@@ -5,6 +5,7 @@
 export interface Env {
   // Durable Objects
   SESSIONS: DurableObjectNamespace
+  RATE_LIMITER: DurableObjectNamespace
 
   // Environment Variables
   TELEGRAM_CLIENT_ID: string
