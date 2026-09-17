@@ -234,6 +234,13 @@ body {
   color: var(--muted);
 }
 
+.progress-timer {
+  margin: 0.25rem 0 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
 .status {
   margin: 1.25rem 0 0;
   color: var(--muted);
@@ -249,9 +256,16 @@ body {
 
 .outcome {
   margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
   display: grid;
   gap: 0.75rem;
   justify-items: start;
+}
+
+/* display: grid above would otherwise override the hidden attribute. */
+.outcome[hidden] {
+  display: none;
 }
 
 .outcome-title {

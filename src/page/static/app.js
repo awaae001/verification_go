@@ -20,6 +20,7 @@ const elements = {
   powProgress: document.getElementById("pow-progress"),
   powProgressBar: document.getElementById("pow-progress-bar"),
   powProgressValue: document.getElementById("pow-progress-value"),
+  powTimer: document.getElementById("pow-timer"),
   status: document.getElementById("status"),
   outcome: document.getElementById("outcome"),
   outcomeTitle: document.getElementById("outcome-title"),
@@ -102,6 +103,9 @@ function showStage(name) {
   for (const [key, section] of Object.entries(stages)) {
     section.hidden = key !== name;
   }
+  // Advancing to a stage means the previous attempt is over; any error it
+  // produced must not linger while the new attempt runs.
+  elements.outcome.hidden = true;
 }
 
 function hideStages() {
@@ -140,6 +144,34 @@ function stopWorkers() {
     worker.terminate();
   }
   session.workers = [];
+  stopPowTimer();
+}
+
+let powTimerID = null;
+let powStartedAt = 0;
+
+function formatElapsed(milliseconds) {
+  const totalSeconds = Math.floor(milliseconds / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function startPowTimer() {
+  stopPowTimer();
+  powStartedAt = performance.now();
+  elements.powTimer.textContent = "0:00";
+  powTimerID = window.setInterval(() => {
+    elements.powTimer.textContent = formatElapsed(performance.now() - powStartedAt);
+  }, 250);
+}
+
+function stopPowTimer() {
+  if (powTimerID === null) {
+    return;
+  }
+  window.clearInterval(powTimerID);
+  powTimerID = null;
 }
 
 function setProgress(percentage) {
@@ -214,6 +246,9 @@ async function submitTurnstile(token) {
     return;
   }
   session.turnstilePending = true;
+  // A fresh token means a new attempt: clear the previous failure now
+  // instead of waiting for the attempt to succeed.
+  elements.outcome.hidden = true;
   setStatus(msg("status.checking"));
   try {
     const result = await post("/antibot", { token });
@@ -258,6 +293,9 @@ async function startTelegram() {
 
 async function submitTelegram() {
   elements.telegramButton.disabled = true;
+  // A button click starts a new attempt: clear the previous failure now
+  // instead of waiting for the attempt to succeed.
+  elements.outcome.hidden = true;
   setStatus(msg("status.telegram_connecting"));
   try {
     const idToken = await session.requestIDToken();
@@ -316,6 +354,7 @@ function startProofOfWork(difficulty, maximumWork) {
   setProgress(0);
 
   stopWorkers();
+  startPowTimer();
   const availableCores = Number.isInteger(navigator.hardwareConcurrency)
     ? navigator.hardwareConcurrency
     : 2;
