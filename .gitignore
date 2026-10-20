@@ -33,3 +33,7 @@ go.work.sum
 
 ## data
 data/
+worker/.wr-d
+worker/.wr-p
+worker/.wrangler-dryrun
+worker/.wrangler-dryrun-prod

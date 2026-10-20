@@ -1,0 +1,122 @@
+name = "telegram-verification"
+main = "src/index.ts"
+compatibility_date = "2024-11-27"
+compatibility_flags = ["nodejs_compat"]
+
+# Workers AI (如果需要未来扩展 AI 功能)
+# ai = { binding = "AI" }
+
+# 环境变量 (非敏感配置)
+[vars]
+TELEGRAM_CLIENT_ID = "your_telegram_bot_client_id"
+BASE_URL = "https://verify.example.com"
+TURNSTILE_SITE_KEY = "your_turnstile_site_key"
+TURNSTILE_ACTION = "verify"
+
+# PoW 配置
+POW_DIFFICULTY = 6
+POW_MAXIMUM_WORK = 268435456
+
+# 会话配置
+SESSION_TTL_SECONDS = 900
+SESSION_VERIFIED_RETENTION_SECONDS = 300
+SESSION_MAX_TOTAL = 10000
+SESSION_MAX_PER_CLIENT = 1000
+
+# Turnstile 限制
+TURNSTILE_MAX_CONCURRENT = 32
+TURNSTILE_MAX_PER_MINUTE = 300
+TURNSTILE_MAX_ATTEMPTS = 5
+TURNSTILE_RETRY_INTERVAL_MS = 1000
+
+# Secrets (敏感信息) - 生产环境需通过 wrangler secret put 覆盖
+TURNSTILE_SECRET = ""
+TRUSTED_CLIENT_KEYS = ""
+
+# Durable Objects 绑定
+[[durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionStore"
+
+[[durable_objects.bindings]]
+name = "RATE_LIMITER"
+class_name = "RateLimiter"
+
+# Durable Objects 迁移
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SessionStore"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["RateLimiter"]
+
+# ─────────────────────────────────────────────────────────────
+# 命名环境配置
+#
+# 重要：wrangler 中 vars / durable_objects / kv_namespaces 等绑定类配置
+# 【不会】从顶层继承到命名环境，必须在每个 [env.X] 下重新声明，
+# 否则该环境部署出去将没有任何绑定。
+# ─────────────────────────────────────────────────────────────
+
+# 开发环境
+[env.dev]
+name = "telegram-verification-dev"
+
+[env.dev.vars]
+TELEGRAM_CLIENT_ID = "your_telegram_bot_client_id"
+BASE_URL = "http://localhost:8787"
+TURNSTILE_SITE_KEY = "your_turnstile_site_key"
+TURNSTILE_ACTION = "verify"
+POW_DIFFICULTY = 6
+POW_MAXIMUM_WORK = 268435456
+SESSION_TTL_SECONDS = 900
+SESSION_VERIFIED_RETENTION_SECONDS = 300
+SESSION_MAX_TOTAL = 10000
+SESSION_MAX_PER_CLIENT = 1000
+TURNSTILE_MAX_CONCURRENT = 32
+TURNSTILE_MAX_PER_MINUTE = 300
+TURNSTILE_MAX_ATTEMPTS = 5
+TURNSTILE_RETRY_INTERVAL_MS = 1000
+TURNSTILE_SECRET = ""
+TRUSTED_CLIENT_KEYS = ""
+
+[[env.dev.durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionStore"
+
+# 生产环境
+[env.production]
+name = "telegram-verification-prod"
+
+[env.production.vars]
+TELEGRAM_CLIENT_ID = "your_telegram_bot_client_id"
+BASE_URL = "https://verify.example.com"
+TURNSTILE_SITE_KEY = "your_turnstile_site_key"
+TURNSTILE_ACTION = "verify"
+POW_DIFFICULTY = 6
+POW_MAXIMUM_WORK = 268435456
+SESSION_TTL_SECONDS = 900
+SESSION_VERIFIED_RETENTION_SECONDS = 300
+SESSION_MAX_TOTAL = 10000
+SESSION_MAX_PER_CLIENT = 1000
+TURNSTILE_MAX_CONCURRENT = 32
+TURNSTILE_MAX_PER_MINUTE = 300
+TURNSTILE_MAX_ATTEMPTS = 5
+TURNSTILE_RETRY_INTERVAL_MS = 1000
+TURNSTILE_SECRET = ""
+TRUSTED_CLIENT_KEYS = ""
+
+[[env.production.durable_objects.bindings]]
+name = "SESSIONS"
+class_name = "SessionStore"
+
+# ─────────────────────────────────────────────────────────────
+# 注意：Secrets 的真实值需通过 wrangler secret put 覆盖
+# 
+# 示例（生产环境）：
+#   wrangler secret put TURNSTILE_SECRET --env production
+#   wrangler secret put TRUSTED_CLIENT_KEYS --env production
+#
+# TRUSTED_CLIENT_KEYS 格式: "client1=key1,client2=key2"
+# ─────────────────────────────────────────────────────────────

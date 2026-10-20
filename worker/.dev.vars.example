@@ -1,0 +1,12 @@
+# 开发环境变量模板
+# 复制为 .dev.vars 并填写实际值
+
+# Turnstile Secret Key（开发环境）
+TURNSTILE_SECRET=your_turnstile_secret_key_here
+
+# API Key（用于内部服务）
+API_KEY=your_api_key_here
+
+# 可信客户端密钥
+# 格式: "client_name1=key1,client_name2=key2"
+TRUSTED_CLIENT_KEYS=tg_bot=your_bot_client_key_here
