@@ -27,6 +27,7 @@ const (
 	defaultJWKS         = "https://oauth.telegram.org/.well-known/jwks.json"
 	jwksCacheTTL        = time.Hour
 	jwksRefreshCooldown = time.Minute
+	tokenClockSkew      = time.Minute
 )
 
 // Signature algorithms accepted from Telegram. The key set also advertises
@@ -109,7 +110,7 @@ func (v *Verifier) Verify(ctx context.Context, rawToken, expectedNonce string, n
 	if claims.IssuedAt >= claims.Expires {
 		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "invalid token time range")
 	}
-	if claims.IssuedAt > now.Unix() {
+	if claims.IssuedAt > now.Add(tokenClockSkew).Unix() {
 		return model.TelegramUser{}, utils.NewError(utils.CodeTelegramTokenInvalid, "token was issued in the future")
 	}
 	if claims.Expires <= now.Unix() {

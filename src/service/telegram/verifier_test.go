@@ -276,6 +276,45 @@ func TestRejectExpiredToken(t *testing.T) {
 	}
 }
 
+func TestVerifyTokenTimeBounds(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	keySigner := newEd25519Signer(t)
+	verifier := newVerifier(t, keySigner.jwk("oidc-1"))
+	tests := []struct {
+		name         string
+		issuedAfter  time.Duration
+		expiresAfter time.Duration
+		wantError    string
+	}{
+		{"issued now", 0, 5 * time.Minute, ""},
+		{"issued one second ahead", time.Second, 5 * time.Minute, ""},
+		{"issued at skew limit", time.Minute, 5 * time.Minute, ""},
+		{"issued beyond skew limit", time.Minute + time.Second, 5 * time.Minute, "token was issued in the future"},
+		{"expired one second ago", -time.Minute, -time.Second, "token is expired"},
+		{"expires now", -time.Minute, 0, "token is expired"},
+		{"invalid time range", time.Minute, time.Minute, "invalid token time range"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			claims := validClaims(now)
+			claims["iat"] = now.Add(test.issuedAfter).Unix()
+			claims["exp"] = now.Add(test.expiresAfter).Unix()
+			token := newToken(t, algEdDSA, "oidc-1", keySigner, claims)
+
+			_, err := verifier.Verify(context.Background(), token, testNonce, now)
+			if test.wantError == "" {
+				if err != nil {
+					t.Fatalf("Verify: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), test.wantError) {
+				t.Fatalf("Verify error = %v, want %q", err, test.wantError)
+			}
+		})
+	}
+}
+
 func TestRejectUnknownKeyID(t *testing.T) {
 	now := time.Now()
 	keySigner := newRSASigner(t)
